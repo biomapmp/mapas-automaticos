@@ -295,7 +295,7 @@ def add_title_box(fig, map_name, project_name):
     title_text = "\n".join(text_lines)
     fig.text(
         0.5, 0.97, title_text,
-        fontsize=18, fontweight="bold",
+        fontsize=18, fontweight="bold", color="#111111",
         va="top", ha="center",
         bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.85),
     )
@@ -402,9 +402,9 @@ def add_info_box(fig, project_name, map_name, gdf):
     info_text = "\n".join(lines)
 
     fig.text(
-        0.78, 0.07, info_text,
-        fontsize=12, fontproperties=FP12,
-        va="bottom", ha="left",
+        0.02, 0.55, info_text,
+        fontsize=12, fontproperties=FP12, color="#111111",
+        va="top", ha="left",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor="black", alpha=0.9),
     )
 
@@ -432,10 +432,10 @@ def create_static_map(
 
     fig = plt.figure(figsize=(16, 11))
 
-    left = 0.1
-    bottom = 0.14
+    left = 0.22
+    bottom = 0.12
     map_w = 0.75
-    map_h = 0.72
+    map_h = 0.74
 
     ax = fig.add_axes([left, bottom, map_w, map_h])
 
