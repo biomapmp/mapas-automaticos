@@ -214,10 +214,23 @@ def _nice_interval(span, target_count=6):
     return 10 * magnitude
 
 
-def draw_coordinate_grid(ax, extent_4326, line_kw=None):
-    if line_kw is None:
-        line_kw = {"linewidth": 0.4, "color": "#555555", "alpha": 0.5, "linestyle": "--"}
+def _fmt_coord(deg, is_lon=True):
+    """Format coordinate in degrees/minutes for cleaner labels."""
+    d = abs(deg)
+    degrees = int(d)
+    minutes = (d - degrees) * 60
+    if abs(minutes - round(minutes)) < 0.01:
+        minutes = round(minutes)
+    suffix = ("E" if deg >= 0 else "W") if is_lon else ("N" if deg >= 0 else "S")
+    if minutes == 0:
+        return f"{degrees}°{suffix}"
+    elif isinstance(minutes, int):
+        return f"{degrees}°{minutes}'{suffix}"
+    else:
+        return f"{degrees}°{minutes:.1f}'{suffix}"
 
+
+def draw_coordinate_grid(ax, extent_4326):
     west, east, south, north = extent_4326
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
@@ -230,45 +243,43 @@ def draw_coordinate_grid(ax, extent_4326, line_kw=None):
     lon_start = np.floor(west / lon_interval) * lon_interval
     lat_start = np.floor(south / lat_interval) * lat_interval
 
-    lons = np.arange(lon_start, east + lon_interval, lon_interval)
-    lats = np.arange(lat_start, north + lat_interval, lat_interval)
+    lons = np.arange(lon_start, east + lon_interval * 0.5, lon_interval)
+    lats = np.arange(lat_start, north + lat_interval * 0.5, lat_interval)
+
+    gl_kw = {"linewidth": 0.3, "color": "#666666", "alpha": 0.4, "linestyle": "--", "zorder": 2}
+    for lon in lons:
+        if west <= lon <= east:
+            x1, y1 = _deg_to_3857(lon, south)
+            x2, y2 = _deg_to_3857(lon, north)
+            ax.plot([x1, x2], [y1, y2], **gl_kw)
+    for lat in lats:
+        if south <= lat <= north:
+            x1, y1 = _deg_to_3857(west, lat)
+            x2, y2 = _deg_to_3857(east, lat)
+            ax.plot([x1, x2], [y1, y2], **gl_kw)
+
+    lbl_kw = {"fontsize": 7.5, "color": "#111111", "zorder": 7, "fontweight": "bold"}
 
     for lon in lons:
-        x1, y1 = _deg_to_3857(lon, south)
-        x2, y2 = _deg_to_3857(lon, east)
-        ax.plot([x1, x2], [y1, y2], zorder=2, **line_kw)
+        if west <= lon <= east:
+            x_data, _ = _deg_to_3857(lon, (south + north) / 2)
+            label = _fmt_coord(lon, is_lon=True)
+            ax.annotate(label, xy=(x_data, ymin), xytext=(0, -9),
+                        textcoords="offset points", ha="center", va="top",
+                        annotation_clip=False, **lbl_kw)
+            ax.annotate(label, xy=(x_data, ymax), xytext=(0, 7),
+                        textcoords="offset points", ha="center", va="bottom",
+                        annotation_clip=False, **lbl_kw)
     for lat in lats:
-        x1, y1 = _deg_to_3857(west, lat)
-        x2, y2 = _deg_to_3857(east, lat)
-        ax.plot([x1, x2], [y1, y2], zorder=2, **line_kw)
-
-    lon_lbls = [l for l in lons if west <= l <= east]
-    lat_lbls = [l for l in lats if south <= l <= north]
-
-    for lon in lon_lbls:
-        x_data, _ = _deg_to_3857(lon, (south + north) / 2)
-        ew = "E" if lon >= 0 else "W"
-        label = f"{abs(lon):.4f}°{ew}" if abs(lon) < 10 else f"{abs(lon):.2f}°{ew}"
-        ax.annotate(label, xy=(x_data, ymin), xytext=(0, -8),
-                    textcoords="offset points", ha="center", va="top",
-                    fontsize=7, zorder=7,
-                    annotation_clip=False)
-        ax.annotate(label, xy=(x_data, ymax), xytext=(0, 6),
-                    textcoords="offset points", ha="center", va="bottom",
-                    fontsize=7, zorder=7,
-                    annotation_clip=False)
-    for lat in lat_lbls:
-        _, y_data = _deg_to_3857((west + east) / 2, lat)
-        ns = "S" if lat < 0 else "N"
-        label = f"{abs(lat):.4f}°{ns}" if abs(lat) < 10 else f"{abs(lat):.2f}°{ns}"
-        ax.annotate(label, xy=(xmin, y_data), xytext=(-8, 0),
-                    textcoords="offset points", ha="right", va="center",
-                    fontsize=7, zorder=7,
-                    annotation_clip=False)
-        ax.annotate(label, xy=(xmax, y_data), xytext=(6, 0),
-                    textcoords="offset points", ha="left", va="center",
-                    fontsize=7, zorder=7,
-                    annotation_clip=False)
+        if south <= lat <= north:
+            _, y_data = _deg_to_3857((west + east) / 2, lat)
+            label = _fmt_coord(lat, is_lon=False)
+            ax.annotate(label, xy=(xmin, y_data), xytext=(-9, 0),
+                        textcoords="offset points", ha="right", va="center",
+                        annotation_clip=False, **lbl_kw)
+            ax.annotate(label, xy=(xmax, y_data), xytext=(7, 0),
+                        textcoords="offset points", ha="left", va="center",
+                        annotation_clip=False, **lbl_kw)
 
 
 def add_map_border(ax):
@@ -297,7 +308,7 @@ def add_title_box(fig, map_name, project_name):
         0.5, 0.97, title_text,
         fontsize=18, fontweight="bold", color="#111111",
         va="top", ha="center",
-        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.85),
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
     )
 
 
@@ -310,7 +321,7 @@ def add_logo_box(fig, logo_img):
     logo_h_in = logo_w_in / logo_aspect
     fig_w, fig_h = fig.get_size_inches()
     ax_logo = fig.add_axes(
-        [0.015, 0.01, logo_w_in / fig_w, logo_h_in / fig_h],
+        [0.015, 0.015, logo_w_in / fig_w, logo_h_in / fig_h],
         zorder=10,
     )
     ax_logo.imshow(logo_img)
@@ -396,16 +407,15 @@ def add_info_box(fig, project_name, map_name, gdf):
     lines = []
     lines.append(f"Proyecto: {project_name}")
     lines.append(f"Mapa: {map_name}")
-    lines.append(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}")
     lines.append(f"Superficie: {total_area_km2:,.2f} km²")
     lines.append(f"Perímetro: {perimeter_km:,.2f} km")
     info_text = "\n".join(lines)
 
     fig.text(
-        0.02, 0.82, info_text,
-        fontsize=12, fontproperties=FP12, color="#111111",
+        0.02, 0.92, info_text,
+        fontsize=10, fontproperties=FontProperties(family=FONT_FAMILY, size=10), color="#111111",
         va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor="black", alpha=0.9),
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.9),
     )
 
 
@@ -430,12 +440,12 @@ def create_static_map(
         bounds_4326[1] - ym, bounds_4326[3] + ym,
     ]
 
-    fig = plt.figure(figsize=(16, 11))
+    fig = plt.figure(figsize=(16, 12))
 
-    map_left = 0.22
+    map_left = 0.28
     map_bottom = 0.08
-    map_w = 0.75
-    map_h = 0.78
+    map_w = 0.69
+    map_h = 0.70
 
     ax = fig.add_axes([map_left, map_bottom, map_w, map_h])
 
