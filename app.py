@@ -9,12 +9,12 @@ import geopandas as gpd
 import folium
 from folium import plugins
 from streamlit_folium import st_folium
+import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from matplotlib.font_manager import FontProperties, fontManager
 import contextily as ctx
 from PIL import Image
-import numpy as np
+import matplotlib.patches as mpatches
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "Montserrat.ttf")
 if os.path.exists(FONT_PATH):
@@ -404,24 +404,26 @@ def add_info_box(fig, project_name, map_name, gdf):
     perimeter_m = area_3857.length.sum()
     perimeter_km = perimeter_m / 1000
 
+    NATURA_GREEN = "#2D6A4F"
+    DARK = "#222222"
+
     lines = []
-    lines.append("Departamento Técnico")
     lines.append(f"Proyecto: {project_name}")
     lines.append(f"Mapa: {map_name}")
     lines.append(f"Superficie: {total_area_km2:,.2f} km²")
     lines.append(f"Perímetro: {perimeter_km:,.2f} km")
-    info_text = "\n".join(lines)
+    data_text = "\n".join(lines)
 
     fig.text(
         0.02, 0.87, "Departamento Técnico",
-        fontsize=9, fontweight="bold", color="#111111",
+        fontsize=9, fontweight="bold", color=NATURA_GREEN,
         va="top", ha="left",
     )
     fig.text(
-        0.02, 0.84, "\n".join(lines[1:]),
-        fontsize=9, fontproperties=FontProperties(family=FONT_FAMILY, size=9), color="#111111",
+        0.02, 0.853, data_text,
+        fontsize=9, fontproperties=FontProperties(family=FONT_FAMILY, size=9), color=DARK,
         va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="white", edgecolor="black", alpha=0.9),
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="white", edgecolor=NATURA_GREEN, alpha=0.95, linewidth=1.2),
     )
 
 
