@@ -75,6 +75,7 @@ def read_shapefile_zip(file_bytes):
                     shp_files.append(os.path.join(root, f))
         if not shp_files:
             raise ValueError("No se encontró un archivo .shp en el ZIP")
+        os.environ["SHAPE_RESTORE_SHX"] = "YES"
         gdf = gpd.read_file(shp_files[0])
         return gdf
 
@@ -88,14 +89,12 @@ def load_polygon(uploaded_file):
     elif fname.endswith(".zip"):
         return read_shapefile_zip(file_bytes)
     elif fname.endswith(".shp"):
-        with tempfile.NamedTemporaryFile(suffix=".shp", delete=False) as f:
-            f.write(file_bytes)
-            f.flush()
-            path = f.name
-        try:
-            return gpd.read_file(path)
-        finally:
-            os.unlink(path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shp_path = os.path.join(tmpdir, uploaded_file.name)
+            with open(shp_path, "wb") as f:
+                f.write(file_bytes)
+            os.environ["SHAPE_RESTORE_SHX"] = "YES"
+            return gpd.read_file(shp_path)
     elif fname.endswith(".geojson") or fname.endswith(".json"):
         with tempfile.NamedTemporaryFile(suffix=".geojson", delete=False) as f:
             f.write(file_bytes)
