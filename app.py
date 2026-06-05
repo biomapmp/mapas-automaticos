@@ -402,7 +402,7 @@ def add_info_box(fig, project_name, map_name, gdf):
     info_text = "\n".join(lines)
 
     fig.text(
-        0.02, 0.55, info_text,
+        0.02, 0.82, info_text,
         fontsize=12, fontproperties=FP12, color="#111111",
         va="top", ha="left",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor="black", alpha=0.9),
@@ -432,15 +432,15 @@ def create_static_map(
 
     fig = plt.figure(figsize=(16, 11))
 
-    left = 0.22
-    bottom = 0.12
+    map_left = 0.22
+    map_bottom = 0.08
     map_w = 0.75
-    map_h = 0.74
+    map_h = 0.78
 
-    ax = fig.add_axes([left, bottom, map_w, map_h])
+    ax = fig.add_axes([map_left, map_bottom, map_w, map_h])
 
     bounds_3857 = gdf_3857.total_bounds
-    margin_3857 = 0.06
+    margin_3857 = 0.05
     xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
     ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
     ax.set_xlim(bounds_3857[0] - xm_3857, bounds_3857[2] + xm_3857)
