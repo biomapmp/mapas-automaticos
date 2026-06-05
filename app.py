@@ -80,28 +80,35 @@ def read_shapefile_zip(file_bytes):
         return gdf
 
 
+def ensure_crs(gdf):
+    if gdf.crs is None:
+        st.warning("El archivo no tiene un sistema de coordenadas definido. Se asume WGS84 (EPSG:4326).")
+        gdf.set_crs("EPSG:4326", inplace=True)
+    return gdf
+
+
 def load_polygon(uploaded_file):
     file_bytes = uploaded_file.getvalue()
     fname = uploaded_file.name.lower()
 
     if fname.endswith(".kml") or fname.endswith(".kmz"):
-        return read_kml(file_bytes)
+        return ensure_crs(read_kml(file_bytes))
     elif fname.endswith(".zip"):
-        return read_shapefile_zip(file_bytes)
+        return ensure_crs(read_shapefile_zip(file_bytes))
     elif fname.endswith(".shp"):
         with tempfile.TemporaryDirectory() as tmpdir:
             shp_path = os.path.join(tmpdir, uploaded_file.name)
             with open(shp_path, "wb") as f:
                 f.write(file_bytes)
             os.environ["SHAPE_RESTORE_SHX"] = "YES"
-            return gpd.read_file(shp_path)
+            return ensure_crs(gpd.read_file(shp_path))
     elif fname.endswith(".geojson") or fname.endswith(".json"):
         with tempfile.NamedTemporaryFile(suffix=".geojson", delete=False) as f:
             f.write(file_bytes)
             f.flush()
             path = f.name
         try:
-            return gpd.read_file(path)
+            return ensure_crs(gpd.read_file(path))
         finally:
             os.unlink(path)
     else:
@@ -111,7 +118,9 @@ def load_polygon(uploaded_file):
 
 
 def create_interactive_map(gdf, basemap_name, project_name, map_name):
-    if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
+    if gdf.crs is None:
+        gdf.set_crs("EPSG:4326", inplace=True)
+    if gdf.crs.to_string() != "EPSG:4326":
         gdf = gdf.to_crs("EPSG:4326")
 
     bounds = gdf.total_bounds
@@ -256,7 +265,9 @@ def create_static_map(
     gdf, basemap_name, project_name, map_name, logo_path=None,
     include_scale=True, include_north=True
 ):
-    if gdf.crs is None or gdf.crs.to_string() != "EPSG:3857":
+    if gdf.crs is None:
+        gdf = gdf.set_crs("EPSG:4326")
+    if gdf.crs.to_string() != "EPSG:3857":
         gdf_m = gdf.to_crs("EPSG:3857")
     else:
         gdf_m = gdf
