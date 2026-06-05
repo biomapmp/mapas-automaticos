@@ -2,6 +2,7 @@ import io
 import zipfile
 import tempfile
 import os
+from datetime import datetime
 
 import streamlit as st
 import geopandas as gpd
@@ -11,8 +12,14 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import contextily as ctx
 from shapely.geometry import box
+from shapely.ops import transform
 from PIL import Image
 import numpy as np
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import matplotlib.ticker as mticker
+import matplotlib.patches as mpatches
 
 st.set_page_config(page_title="Generador de Mapas Automáticos", layout="wide")
 
@@ -183,7 +190,126 @@ def create_interactive_map(gdf, basemap_name, project_name, map_name):
     return m
 
 
-def add_scale_bar(ax, gdf_m):
+def _deg_to_3857(x, y):
+    """Convert lon, lat to Web Mercator (EPSG:3857) coordinates."""
+    from pyproj import Transformer
+    t = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+    return t.transform(x, y)
+
+
+def _nice_interval(span, target_count=6):
+    """Calculate a nice round interval for gridlines."""
+    interval = span / target_count
+    magnitude = 10 ** np.floor(np.log10(interval))
+    residual = interval / magnitude
+    for nice in [1, 2, 5, 10]:
+        if residual <= nice:
+            return nice * magnitude
+    return 10 * magnitude
+
+
+def draw_coordinate_grid(ax, extent_4326, line_kw=None):
+    """Draw graticule lines and coordinate labels around the map."""
+    if line_kw is None:
+        line_kw = {"linewidth": 0.4, "color": "#555555", "alpha": 0.5, "linestyle": "--"}
+
+    west, east, south, north = extent_4326
+
+    lon_interval = _nice_interval(east - west)
+    lat_interval = _nice_interval(north - south)
+
+    lon_interval = max(lon_interval, 0.0001)
+    lat_interval = max(lat_interval, 0.0001)
+
+    lon_start = np.floor(west / lon_interval) * lon_interval
+    lat_start = np.floor(south / lat_interval) * lat_interval
+
+    lons = np.arange(lon_start, east + lon_interval, lon_interval)
+    lats = np.arange(lat_start, north + lat_interval, lat_interval)
+
+    for lon in lons:
+        x1, y1 = _deg_to_3857(lon, south)
+        x2, y2 = _deg_to_3857(lon, north)
+        ax.plot([x1, x2], [y1, y2], **line_kw, zorder=2)
+
+    for lat in lats:
+        x1, y1 = _deg_to_3857(west, lat)
+        x2, y2 = _deg_to_3857(east, lat)
+        ax.plot([x1, x2], [y1, y2], **line_kw, zorder=2)
+
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+
+    lon_lbls = [l for l in lons if west - 0.5 <= l <= east + 0.5]
+    lat_lbls = [l for l in lats if south - 0.5 <= l <= north + 0.5]
+
+    for lon in lon_lbls:
+        x, _ = _deg_to_3857(lon, (south + north) / 2)
+        ew = "E" if lon >= 0 else "W"
+        lbl = f"{abs(lon):.4f}°{ew}" if abs(lon) < 10 else f"{abs(lon):.2f}°{ew}"
+        ax.text(x, ymin - (ymax - ymin) * 0.025, lbl,
+                ha="center", va="top", fontsize=7.5, fontfamily="sans-serif")
+        ax.text(x, ymax + (ymax - ymin) * 0.015, lbl,
+                ha="center", va="bottom", fontsize=7.5, fontfamily="sans-serif")
+
+    for lat in lat_lbls:
+        _, y = _deg_to_3857((west + east) / 2, lat)
+        ns = "S" if lat < 0 else "N"
+        lbl = f"{abs(lat):.4f}°{ns}" if abs(lat) < 10 else f"{abs(lat):.2f}°{ns}"
+        ax.text(xmin - (xmax - xmin) * 0.025, y, lbl,
+                ha="right", va="center", fontsize=7.5, fontfamily="sans-serif")
+        ax.text(xmax + (xmax - xmin) * 0.015, y, lbl,
+                ha="left", va="center", fontsize=7.5, fontfamily="sans-serif")
+
+
+def add_map_border(ax):
+    """Add a black border frame around the map."""
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    rect = mpatches.Rectangle(
+        (xmin, ymin), xmax - xmin, ymax - ymin,
+        linewidth=1.5, edgecolor="black", facecolor="none", zorder=5
+    )
+    ax.add_patch(rect)
+
+
+def add_title_box(fig, map_name, project_name):
+    """Add title box at the top-left of the figure."""
+    text_lines = []
+    if map_name:
+        text_lines.append(map_name)
+    if project_name:
+        text_lines.append(project_name)
+    if not text_lines:
+        return
+
+    title_text = "\n".join(text_lines)
+    fig.text(
+        0.02, 0.95, title_text,
+        fontsize=16, fontweight="bold", fontfamily="sans-serif",
+        va="top", ha="left",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
+    )
+
+
+def add_logo_box(fig, logo_img):
+    """Add logo at the bottom-left of the figure."""
+    if logo_img is None:
+        return
+    logo_aspect = logo_img.width / logo_img.height
+    logo_w_in = 2.0
+    logo_h_in = logo_w_in / logo_aspect
+    fig_w, fig_h = fig.get_size_inches()
+    ax_logo = fig.add_axes(
+        [0.015, 0.01, logo_w_in / fig_w, logo_h_in / fig_h],
+        zorder=10,
+    )
+    ax_logo.imshow(logo_img)
+    ax_logo.axis("off")
+
+
+def add_scale_bar_map(ax, gdf_m):
+    """Add a scale bar in the bottom-center of the map."""
     bounds = gdf_m.total_bounds
     width_m = bounds[2] - bounds[0]
     height_m = bounds[3] - bounds[1]
@@ -191,159 +317,166 @@ def add_scale_bar(ax, gdf_m):
     target_len = width_m / 5
     order = 10 ** (int(np.log10(target_len)))
     scale_len = round(target_len / order) * order
+    if scale_len < 1:
+        scale_len = order
 
-    x_min = bounds[0] + width_m * 0.06
-    y_min = bounds[1] + height_m * 0.06
+    x_center = (bounds[0] + bounds[2]) / 2
+    x_start = x_center - scale_len / 2
+    y_pos = bounds[1] + height_m * 0.06
 
-    ax.plot(
-        [x_min, x_min + scale_len],
-        [y_min, y_min],
-        color="black",
-        linewidth=2.5,
-        transform=ax.transData,
-    )
-    tick_size = height_m * 0.015
-    ax.plot(
-        [x_min, x_min],
-        [y_min - tick_size, y_min + tick_size],
-        color="black",
-        linewidth=2,
-        transform=ax.transData,
-    )
-    ax.plot(
-        [x_min + scale_len, x_min + scale_len],
-        [y_min - tick_size, y_min + tick_size],
-        color="black",
-        linewidth=2,
-        transform=ax.transData,
-    )
+    ax.plot([x_start, x_start + scale_len], [y_pos, y_pos],
+            color="black", linewidth=2.5, zorder=6)
+    tick = height_m * 0.015
+    ax.plot([x_start, x_start], [y_pos - tick, y_pos + tick],
+            color="black", linewidth=2, zorder=6)
+    ax.plot([x_start + scale_len, x_start + scale_len], [y_pos - tick, y_pos + tick],
+            color="black", linewidth=2, zorder=6)
 
     km_val = scale_len / 1000
     label = f"{km_val:.0f} km" if km_val >= 1 else f"{scale_len:.0f} m"
-    ax.text(
-        x_min + scale_len / 2,
-        y_min - height_m * 0.03,
-        label,
-        ha="center",
-        va="top",
-        fontsize=10,
-        fontweight="bold",
-    )
+    ax.text(x_center, y_pos - height_m * 0.03, label,
+            ha="center", va="top", fontsize=9, fontweight="bold", zorder=6)
 
 
-def add_north_arrow(ax, gdf_m):
+def add_north_arrow_map(ax, gdf_m):
+    """Add a north arrow on the bottom-right of the map."""
     bounds = gdf_m.total_bounds
     width_m = bounds[2] - bounds[0]
     height_m = bounds[3] - bounds[1]
 
-    nx = bounds[0] + width_m * 0.06
-    ny = bounds[1] + height_m * 0.15
+    x_pos = bounds[2] - width_m * 0.08
+    y_pos = bounds[1] + height_m * 0.06
+    arrow_len = height_m * 0.05
 
-    arrow_length = height_m * 0.06
     ax.annotate(
-        "",
-        xy=(nx, ny + arrow_length),
-        xytext=(nx, ny),
-        ha="center",
-        va="bottom",
-        fontsize=14,
-        fontweight="bold",
-        arrowprops=dict(arrowstyle="->", color="black", lw=2.5),
+        "", xy=(x_pos, y_pos + arrow_len), xytext=(x_pos, y_pos),
+        ha="center", va="bottom",
+        arrowprops=dict(arrowstyle="->", color="black", lw=2.5), zorder=6
     )
-    ax.text(
-        nx,
-        ny + arrow_length + height_m * 0.01,
-        "N",
-        ha="center",
-        va="bottom",
-        fontsize=13,
-        fontweight="bold",
+    ax.text(x_pos, y_pos + arrow_len + height_m * 0.01, "N",
+            ha="center", va="bottom", fontsize=11, fontweight="bold", zorder=6)
+
+
+def add_legend(fig, ax, gdf_m):
+    """Add a legend box in the bottom-right section."""
+    legend_text = "Área de interés"
+    from matplotlib.lines import Line2D
+    legend_elem = [
+        Line2D([0], [0], marker="s", color="w", markerfacecolor="#4CAF50",
+               markeredgecolor="#2E7D32", markersize=10, label=legend_text),
+    ]
+    leg = ax.legend(
+        handles=legend_elem,
+        loc="lower right",
+        fontsize=9,
+        framealpha=0.9,
+        edgecolor="black",
+        facecolor="white",
+        title="Leyenda",
+        title_fontsize=10,
+    )
+    leg.get_title().set_fontweight("bold")
+
+
+def add_info_box(fig, project_name, map_name, gdf):
+    """Add an information box with project details."""
+    area_3857 = gdf.to_crs("EPSG:3857")
+    total_area_km2 = area_3857.area.sum() / 1_000_000
+
+    lines = []
+    lines.append(f"Proyecto: {project_name}")
+    lines.append(f"Mapa: {map_name}")
+    lines.append(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}")
+    lines.append(f"Superficie: {total_area_km2:,.2f} km²")
+    info_text = "\n".join(lines)
+
+    fig.text(
+        0.78, 0.04, info_text,
+        fontsize=8, fontfamily="sans-serif",
+        va="bottom", ha="left",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.9),
     )
 
 
 def create_static_map(
     gdf, basemap_name, project_name, map_name, logo_path=None,
-    include_scale=True, include_north=True
+    include_scale=True, include_north=True, include_grid=True,
+    include_legend=True, include_infobox=True, include_border=True,
 ):
     if gdf.crs is None:
         gdf = gdf.set_crs("EPSG:4326")
-    if gdf.crs.to_string() != "EPSG:3857":
-        gdf_m = gdf.to_crs("EPSG:3857")
-    else:
-        gdf_m = gdf
+
+    gdf_4326 = gdf.to_crs("EPSG:4326")
+    gdf_3857 = gdf.to_crs("EPSG:3857")
+
+    bounds_4326 = gdf_4326.total_bounds
+    margin = 0.06
+    xm = (bounds_4326[2] - bounds_4326[0]) * margin
+    ym = (bounds_4326[3] - bounds_4326[1]) * margin
+
+    extent_4326 = [
+        bounds_4326[0] - xm, bounds_4326[2] + xm,
+        bounds_4326[1] - ym, bounds_4326[3] + ym,
+    ]
+
+    fig = plt.figure(figsize=(16, 11))
+
+    left = 0.1
+    bottom = 0.1
+    map_w = 0.75
+    map_h = 0.78
+
+    ax = fig.add_axes([left, bottom, map_w, map_h])
+
+    try:
+        ctx.add_basemap(
+            ax,
+            crs=gdf_3857.crs.to_string(),
+            source=ctx_providers[basemap_name],
+        )
+    except Exception:
+        try:
+            ctx.add_basemap(ax, crs=gdf_3857.crs.to_string(),
+                          source=ctx.providers.OpenStreetMap.Mapnik)
+        except Exception:
+            pass
+
+    gdf_3857.plot(
+        ax=ax,
+        facecolor="#4CAF50",
+        edgecolor="#2E7D32",
+        linewidth=1.5,
+        alpha=0.4,
+        zorder=3,
+    )
+
+    if include_border:
+        add_map_border(ax)
+
+    if include_grid:
+        draw_coordinate_grid(ax, extent_4326)
+
+    if include_legend:
+        add_legend(fig, ax, gdf_3857)
+
+    if include_scale:
+        add_scale_bar_map(ax, gdf_3857)
+
+    if include_north:
+        add_north_arrow_map(ax, gdf_3857)
+
+    ctx.add_attribution(ax, "")
 
     if logo_path and os.path.exists(logo_path):
         logo_img = Image.open(logo_path)
     else:
         logo_img = None
 
-    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    add_title_box(fig, map_name, project_name)
+    add_logo_box(fig, logo_img)
 
-    try:
-        ctx.add_basemap(
-            ax,
-            crs=gdf_m.crs.to_string(),
-            source=ctx_providers[basemap_name],
-        )
-    except Exception:
-        try:
-            ctx.add_basemap(ax, crs=gdf_m.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
-        except Exception:
-            pass
-
-    gdf_m.plot(
-        ax=ax,
-        facecolor="#4CAF50",
-        edgecolor="#2E7D32",
-        linewidth=1.5,
-        alpha=0.4,
-    )
-
-    ctx.add_attribution(ax, "")
-
-    bounds = gdf_m.total_bounds
-    margin = 0.05
-    x_margin = (bounds[2] - bounds[0]) * margin
-    y_margin = (bounds[3] - bounds[1]) * margin
-    ax.set_xlim(bounds[0] - x_margin, bounds[2] + x_margin)
-    ax.set_ylim(bounds[1] - y_margin, bounds[3] + y_margin)
-
-    ax.axis("off")
-
-    if logo_img:
-        logo_aspect = logo_img.width / logo_img.height
-        logo_width_inches = 1.8
-        logo_height_inches = logo_width_inches / logo_aspect
-        fig_w, fig_h = fig.get_size_inches()
-        ax_logo = fig.add_axes(
-            [0.03, 0.03, logo_width_inches / fig_w, logo_height_inches / fig_h],
-            zorder=10,
-        )
-        ax_logo.imshow(logo_img)
-        ax_logo.axis("off")
-
-    title_lines = []
-    if map_name:
-        title_lines.append(map_name)
-    if project_name:
-        title_lines.append(project_name)
-
-    if title_lines:
-        title_text = "\n".join(title_lines)
-        ax.set_title(
-            title_text,
-            fontsize=14,
-            fontweight="bold",
-            pad=12,
-            loc="center",
-            family="sans-serif",
-        )
-
-    if include_scale:
-        add_scale_bar(ax, gdf_m)
-
-    if include_north:
-        add_north_arrow(ax, gdf_m)
+    if include_infobox:
+        add_info_box(fig, project_name, map_name, gdf_4326)
 
     return fig
 
@@ -429,63 +562,70 @@ def main():
 
         with col_a:
             export_dpi = st.selectbox("Resolución de exportación", [150, 200, 300], index=1)
-            include_scale = st.checkbox("Incluir barra de escala", value=True)
-            include_north = st.checkbox("Incluir norte", value=True)
+            include_grid = st.checkbox("Marco de coordenadas", value=True)
+            include_border = st.checkbox("Recuadro del mapa", value=True)
 
         with col_b:
-            if st.button("Generar mapa estático (PNG)", type="primary", use_container_width=True):
-                with st.spinner("Generando mapa estático..."):
-                    try:
-                        logo_path = None
-                        if uploaded_logo:
-                            logo_ext = uploaded_logo.name.split(".")[-1]
-                            tmp_logo = tempfile.NamedTemporaryFile(
-                                suffix=f".{logo_ext}", delete=False
-                            )
-                            tmp_logo.write(uploaded_logo.getvalue())
-                            tmp_logo.close()
-                            logo_path = tmp_logo.name
-                        elif os.path.exists(LOGO_DEFAULT):
-                            logo_path = LOGO_DEFAULT
+            include_scale = st.checkbox("Barra de escala", value=True)
+            include_north = st.checkbox("Flecha de norte", value=True)
+            include_infobox = st.checkbox("Caja de información", value=True)
 
-                        fig = create_static_map(
-                            gdf,
-                            basemap_name,
-                            project_name,
-                            map_name,
-                            logo_path=logo_path,
-                            include_scale=include_scale,
-                            include_north=include_north,
+        if st.button("Generar mapa estático (PNG)", type="primary", use_container_width=True):
+            with st.spinner("Generando mapa estático..."):
+                try:
+                    logo_path = None
+                    if uploaded_logo:
+                        logo_ext = uploaded_logo.name.split(".")[-1]
+                        tmp_logo = tempfile.NamedTemporaryFile(
+                            suffix=f".{logo_ext}", delete=False
                         )
+                        tmp_logo.write(uploaded_logo.getvalue())
+                        tmp_logo.close()
+                        logo_path = tmp_logo.name
+                    elif os.path.exists(LOGO_DEFAULT):
+                        logo_path = LOGO_DEFAULT
 
-                        buf = io.BytesIO()
-                        fig.savefig(
-                            buf,
-                            format="png",
-                            dpi=export_dpi,
-                            bbox_inches="tight",
-                            facecolor="white",
-                            edgecolor="none",
-                        )
-                        plt.close(fig)
+                    fig = create_static_map(
+                        gdf,
+                        basemap_name,
+                        project_name,
+                        map_name,
+                        logo_path=logo_path,
+                        include_scale=include_scale,
+                        include_north=include_north,
+                        include_grid=include_grid,
+                        include_border=include_border,
+                        include_infobox=include_infobox,
+                    )
 
-                        if uploaded_logo and logo_path and os.path.exists(logo_path):
-                            os.unlink(logo_path)
+                    buf = io.BytesIO()
+                    fig.savefig(
+                        buf,
+                        format="png",
+                        dpi=export_dpi,
+                        bbox_inches="tight",
+                        facecolor="white",
+                        edgecolor="none",
+                    )
+                    plt.close(fig)
 
-                        st.success("Mapa generado correctamente")
-                        st.download_button(
-                            label="Descargar PNG",
-                            data=buf.getvalue(),
-                            file_name=f"{map_name.replace(' ', '_')}.png",
-                            mime="image/png",
-                            use_container_width=True,
-                        )
+                    if uploaded_logo and logo_path and os.path.exists(logo_path):
+                        os.unlink(logo_path)
 
-                        buf.seek(0)
-                        st.image(buf, caption="Vista previa del mapa estático")
+                    st.success("Mapa generado correctamente")
+                    st.download_button(
+                        label="Descargar PNG",
+                        data=buf.getvalue(),
+                        file_name=f"{map_name.replace(' ', '_')}.png",
+                        mime="image/png",
+                        use_container_width=True,
+                    )
 
-                    except Exception as e:
-                        st.error(f"Error al generar mapa estático: {str(e)}")
+                    buf.seek(0)
+                    st.image(buf, caption="Vista previa del mapa estático")
+
+                except Exception as e:
+                    st.error(f"Error al generar mapa estático: {str(e)}")
 
         with st.expander("Exportar mapa interactivo (HTML)"):
             if st.button("Generar HTML"):
