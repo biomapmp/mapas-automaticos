@@ -338,7 +338,7 @@ def add_title_box(fig, map_name, project_name):
     title_text = "\n".join(text_lines)
     fig.text(
         0.5, 0.97, title_text,
-        fontsize=14, fontweight="bold", color="#111111",
+        fontsize=20, fontweight="bold", color="#111111",
         va="top", ha="center",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
     )
