@@ -59,6 +59,20 @@ ctx_providers = {
 }
 
 
+LAYER_COLORS = [
+    ("#4CAF50", "#2E7D32"),
+    ("#2196F3", "#1565C0"),
+    ("#FF9800", "#E65100"),
+    ("#9C27B0", "#6A1B9A"),
+    ("#F44336", "#C62828"),
+    ("#00BCD4", "#00838F"),
+    ("#FFC107", "#FF8F00"),
+    ("#607D8B", "#37474F"),
+    ("#E91E63", "#AD1457"),
+    ("#8BC34A", "#558B2F"),
+]
+
+
 def read_kml(file_bytes):
     with tempfile.NamedTemporaryFile(suffix=".kml", delete=False) as f:
         f.write(file_bytes)
@@ -130,13 +144,20 @@ def load_polygon(uploaded_file):
         )
 
 
-def create_interactive_map(gdf, basemap_name, project_name, map_name):
-    if gdf.crs is None:
-        gdf.set_crs("EPSG:4326", inplace=True)
-    if gdf.crs.to_string() != "EPSG:4326":
-        gdf = gdf.to_crs("EPSG:4326")
+def create_interactive_map(layers, basemap_name, project_name, map_name):
+    if not layers:
+        return None
 
-    bounds = gdf.total_bounds
+    merged = []
+    for gdf, _name, _fc, _ec in layers:
+        if gdf.crs is None:
+            gdf.set_crs("EPSG:4326", inplace=True)
+        if gdf.crs.to_string() != "EPSG:4326":
+            gdf = gdf.to_crs("EPSG:4326")
+        merged.append(gdf)
+
+    merged_gdf = gpd.pd.concat(merged, ignore_index=True)
+    bounds = merged_gdf.total_bounds
     center = [(bounds[1] + bounds[3]) / 2, (bounds[0] + bounds[2]) / 2]
 
     tile_url = BASEMAPS[basemap_name]
@@ -149,19 +170,21 @@ def create_interactive_map(gdf, basemap_name, project_name, map_name):
         attr=attr,
     )
 
-    style = {
-        "fillColor": "#4CAF50",
-        "color": "#2E7D32",
-        "weight": 2,
-        "fillOpacity": 0.35,
-    }
-
-    geo_json = folium.GeoJson(
-        gdf.to_json(),
-        style_function=lambda x: style,
-        name=map_name or "Polígono",
-    )
-    geo_json.add_to(m)
+    for gdf, layer_name, fill_color, edge_color in layers:
+        if gdf.crs.to_string() != "EPSG:4326":
+            gdf = gdf.to_crs("EPSG:4326")
+        style = {
+            "fillColor": fill_color,
+            "color": edge_color,
+            "weight": 2,
+            "fillOpacity": 0.35,
+        }
+        geo_json = folium.GeoJson(
+            gdf.to_json(),
+            style_function=lambda x, s=style: s,
+            name=layer_name,
+        )
+        geo_json.add_to(m)
 
     if map_name:
         title_html = f"""
@@ -377,14 +400,15 @@ def add_north_arrow_map(ax, gdf_m):
             ha="center", va="bottom", fontsize=11, fontweight="bold", zorder=6)
 
 
-def add_legend(fig, ax, gdf_m):
-    """Add a legend box in the bottom-right section."""
-    legend_text = "Área de interés"
+def add_legend(fig, ax, layers):
     from matplotlib.lines import Line2D
-    legend_elem = [
-        Line2D([0], [0], marker="s", color="w", markerfacecolor="#4CAF50",
-               markeredgecolor="#2E7D32", markersize=10, label=legend_text),
-    ]
+    legend_elem = []
+    for gdf, layer_name, fill_color, edge_color in layers:
+        label = layer_name or "Capa"
+        legend_elem.append(
+            Line2D([0], [0], marker="s", color="w", markerfacecolor=fill_color,
+                   markeredgecolor=edge_color, markersize=10, label=label),
+        )
     leg = ax.legend(
         handles=legend_elem,
         loc="lower right",
@@ -398,20 +422,28 @@ def add_legend(fig, ax, gdf_m):
     leg.get_title().set_fontweight("bold")
 
 
-def add_info_box(fig, project_name, map_name, gdf):
-    area_3857 = gdf.to_crs("EPSG:3857")
-    total_area_km2 = area_3857.area.sum() / 1_000_000
-    perimeter_m = area_3857.length.sum()
-    perimeter_km = perimeter_m / 1000
-
+def add_info_box(fig, project_name, map_name, layers):
     NATURA_GREEN = "#2D6A4F"
     DARK = "#222222"
 
     lines = []
     lines.append(f"Proyecto: {project_name}")
     lines.append(f"Mapa: {map_name}")
-    lines.append(f"Superficie: {total_area_km2:,.2f} km²")
-    lines.append(f"Perímetro: {perimeter_km:,.2f} km")
+
+    total_area = 0
+    total_perim = 0
+    for gdf, layer_name, _fc, _ec in layers:
+        area_3857 = gdf.to_crs("EPSG:3857")
+        area_km2 = area_3857.area.sum() / 1_000_000
+        perim_m = area_3857.length.sum()
+        perim_km = perim_m / 1000
+        total_area += area_km2
+        total_perim += perim_km
+        lines.append(f"{layer_name}: {area_km2:,.2f} km² / {perim_km:,.2f} km")
+
+    if len(layers) > 1:
+        lines.append(f"Total: {total_area:,.2f} km² / {total_perim:,.2f} km")
+
     data_text = "\n".join(lines)
 
     fig.text(
@@ -428,17 +460,26 @@ def add_info_box(fig, project_name, map_name, gdf):
 
 
 def create_static_map(
-    gdf, basemap_name, project_name, map_name, logo_path=None,
+    layers, basemap_name, project_name, map_name, logo_path=None,
     include_scale=True, include_north=True, include_grid=False,
     include_legend=True, include_infobox=True, include_border=True,
 ):
-    if gdf.crs is None:
-        gdf = gdf.set_crs("EPSG:4326")
+    if not layers:
+        return None
 
-    gdf_4326 = gdf.to_crs("EPSG:4326")
-    gdf_3857 = gdf.to_crs("EPSG:3857")
+    gdfs_4326 = []
+    gdfs_3857 = []
+    for gdf, _name, _fc, _ec in layers:
+        g = gdf.copy()
+        if g.crs is None:
+            g = g.set_crs("EPSG:4326")
+        gdfs_4326.append(g.to_crs("EPSG:4326"))
+        gdfs_3857.append(g.to_crs("EPSG:3857"))
 
-    bounds_4326 = gdf_4326.total_bounds
+    merged_4326 = gpd.pd.concat(gdfs_4326, ignore_index=True)
+    merged_3857 = gpd.pd.concat(gdfs_3857, ignore_index=True)
+
+    bounds_4326 = merged_4326.total_bounds
     margin = 0.06
     xm = (bounds_4326[2] - bounds_4326[0]) * margin
     ym = (bounds_4326[3] - bounds_4326[1]) * margin
@@ -457,7 +498,7 @@ def create_static_map(
 
     ax = fig.add_axes([map_left, map_bottom, map_w, map_h])
 
-    bounds_3857 = gdf_3857.total_bounds
+    bounds_3857 = merged_3857.total_bounds
     margin_3857 = 0.05
     xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
     ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
@@ -467,26 +508,28 @@ def create_static_map(
     try:
         ctx.add_basemap(
             ax,
-            crs=gdf_3857.crs.to_string(),
+            crs=merged_3857.crs.to_string(),
             source=ctx_providers[basemap_name],
             zoom="auto",
         )
     except Exception:
         try:
-            ctx.add_basemap(ax, crs=gdf_3857.crs.to_string(),
+            ctx.add_basemap(ax, crs=merged_3857.crs.to_string(),
                           source=ctx.providers.OpenStreetMap.Mapnik,
                           zoom="auto")
         except Exception:
             pass
 
-    gdf_3857.plot(
-        ax=ax,
-        facecolor="#4CAF50",
-        edgecolor="#2E7D32",
-        linewidth=1.5,
-        alpha=0.4,
-        zorder=3,
-    )
+    for gdf_3857, layer_name, fill_color, edge_color in layers:
+        g = gdf_3857.to_crs("EPSG:3857")
+        g.plot(
+            ax=ax,
+            facecolor=fill_color,
+            edgecolor=edge_color,
+            linewidth=1.5,
+            alpha=0.4,
+            zorder=3,
+        )
 
     ctx.add_attribution(ax, "")
 
@@ -497,13 +540,13 @@ def create_static_map(
         draw_coordinate_grid(ax, extent_4326)
 
     if include_legend:
-        add_legend(fig, ax, gdf_3857)
+        add_legend(fig, ax, layers)
 
     if include_scale:
-        add_scale_bar_map(ax, gdf_3857)
+        add_scale_bar_map(ax, merged_3857)
 
     if include_north:
-        add_north_arrow_map(ax, gdf_3857)
+        add_north_arrow_map(ax, merged_3857)
 
     if logo_path and os.path.exists(logo_path):
         logo_img = Image.open(logo_path)
@@ -514,7 +557,7 @@ def create_static_map(
     add_logo_box(fig, logo_img)
 
     if include_infobox:
-        add_info_box(fig, project_name, map_name, gdf_4326)
+        add_info_box(fig, project_name, map_name, layers)
 
     return fig
 
@@ -525,7 +568,7 @@ def main():
 
     if "file_key" not in st.session_state:
         st.session_state["file_key"] = 0
-        st.session_state["gdf"] = None
+        st.session_state["layers"] = []
 
     col1, col2 = st.columns([1, 1])
 
@@ -534,10 +577,11 @@ def main():
         project_name = st.text_input("Nombre del proyecto", value="Proyecto Ejemplo")
         map_name = st.text_input("Nombre del mapa", value="Mapa de Área de Interés")
 
-        uploaded_file = st.file_uploader(
-            "Cargar archivo del polígono",
+        uploaded_files = st.file_uploader(
+            "Cargar archivos (capas)",
             type=["kml", "kmz", "zip", "shp", "geojson", "json"],
-            help="KML, KMZ, ZIP (con SHP), SHP, o GeoJSON",
+            accept_multiple_files=True,
+            help="KML, KMZ, ZIP (con SHP), SHP o GeoJSON. Múltiples archivos = múltiples capas.",
             key=f"file_uploader_{st.session_state.file_key}",
         )
 
@@ -556,40 +600,43 @@ def main():
     with col2:
         st.subheader("Vista previa")
 
-        if uploaded_file is None:
-            st.session_state["gdf"] = None
-            st.info("Carga un archivo para ver la vista previa")
+        if not uploaded_files:
+            st.session_state["layers"] = []
+            st.info("Carga archivos para ver la vista previa")
         else:
-            with st.spinner("Leyendo archivo..."):
+            with st.spinner("Leyendo archivos..."):
                 try:
-                    gdf = load_polygon(uploaded_file)
+                    layers = []
+                    for i, uf in enumerate(uploaded_files):
+                        gdf = load_polygon(uf)
+                        if gdf.empty:
+                            st.warning(f"'{uf.name}' no contiene geometrías válidas, se omite.")
+                            continue
+                        layer_name = os.path.splitext(uf.name)[0]
+                        fc, ec = LAYER_COLORS[i % len(LAYER_COLORS)]
+                        layers.append((gdf, layer_name, fc, ec))
+                        st.success(f"✓ {layer_name}: {len(gdf)} geometría(s)")
 
-                    if gdf.empty:
-                        st.error("El archivo no contiene geometrías válidas.")
-                        st.session_state["gdf"] = None
-                    else:
-                        st.success(f"Polígono cargado: {len(gdf)} geometría(s)")
-                        st.session_state["gdf"] = gdf
-
-                        if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
-                            gdf_plot = gdf.to_crs("EPSG:4326")
-                        else:
-                            gdf_plot = gdf
-
+                    if layers:
+                        st.session_state["layers"] = layers
                         m = create_interactive_map(
-                            gdf_plot, basemap_name, project_name, map_name
+                            layers, basemap_name, project_name, map_name
                         )
-                        st_folium(m, width=None, height=500)
+                        if m:
+                            st_folium(m, width=None, height=500)
+                    else:
+                        st.error("No se pudo cargar ninguna capa.")
+                        st.session_state["layers"] = []
 
                 except Exception as e:
-                    st.error(f"Error al leer el archivo: {str(e)}")
-                    st.session_state["gdf"] = None
+                    st.error(f"Error al leer archivos: {str(e)}")
+                    st.session_state["layers"] = []
 
-    if st.session_state["gdf"] is not None:
-        gdf = st.session_state["gdf"]
+    if st.session_state["layers"]:
+        layers = st.session_state["layers"]
 
         if st.button("Nuevo mapa", type="secondary"):
-            st.session_state["gdf"] = None
+            st.session_state["layers"] = []
             st.session_state["file_key"] += 1
             st.rerun()
 
@@ -624,7 +671,7 @@ def main():
                         logo_path = LOGO_DEFAULT
 
                     fig = create_static_map(
-                        gdf,
+                        layers,
                         basemap_name,
                         project_name,
                         map_name,
@@ -667,12 +714,15 @@ def main():
 
         with st.expander("Exportar mapa interactivo (HTML)"):
             if st.button("Generar HTML"):
-                if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
-                    gdf_html = gdf.to_crs("EPSG:4326")
-                else:
-                    gdf_html = gdf
+                html_layers = []
+                for gdf, layer_name, fc, ec in layers:
+                    if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
+                        gdf_html = gdf.to_crs("EPSG:4326")
+                    else:
+                        gdf_html = gdf
+                    html_layers.append((gdf_html, layer_name, fc, ec))
                 m = create_interactive_map(
-                    gdf_html,
+                    html_layers,
                     basemap_name,
                     project_name,
                     map_name,
