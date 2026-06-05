@@ -426,16 +426,25 @@ def create_static_map(
 
     ax = fig.add_axes([left, bottom, map_w, map_h])
 
+    bounds_3857 = gdf_3857.total_bounds
+    margin_3857 = 0.06
+    xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
+    ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
+    ax.set_xlim(bounds_3857[0] - xm_3857, bounds_3857[2] + xm_3857)
+    ax.set_ylim(bounds_3857[1] - ym_3857, bounds_3857[3] + ym_3857)
+
     try:
         ctx.add_basemap(
             ax,
             crs=gdf_3857.crs.to_string(),
             source=ctx_providers[basemap_name],
+            zoom="auto",
         )
     except Exception:
         try:
             ctx.add_basemap(ax, crs=gdf_3857.crs.to_string(),
-                          source=ctx.providers.OpenStreetMap.Mapnik)
+                          source=ctx.providers.OpenStreetMap.Mapnik,
+                          zoom="auto")
         except Exception:
             pass
 
@@ -449,13 +458,6 @@ def create_static_map(
     )
 
     ctx.add_attribution(ax, "")
-
-    bounds_3857 = gdf_3857.total_bounds
-    margin_3857 = 0.06
-    xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
-    ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
-    ax.set_xlim(bounds_3857[0] - xm_3857, bounds_3857[2] + xm_3857)
-    ax.set_ylim(bounds_3857[1] - ym_3857, bounds_3857[3] + ym_3857)
 
     if include_border:
         add_map_border(ax)
