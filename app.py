@@ -12,13 +12,8 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import contextily as ctx
 from shapely.geometry import box
-from shapely.ops import transform
 from PIL import Image
 import numpy as np
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-import matplotlib.ticker as mticker
 import matplotlib.patches as mpatches
 
 st.set_page_config(page_title="Generador de Mapas Automáticos", layout="wide")
@@ -191,14 +186,14 @@ def create_interactive_map(gdf, basemap_name, project_name, map_name):
 
 
 def _deg_to_3857(x, y):
-    """Convert lon, lat to Web Mercator (EPSG:3857) coordinates."""
     from pyproj import Transformer
     t = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
     return t.transform(x, y)
 
 
 def _nice_interval(span, target_count=6):
-    """Calculate a nice round interval for gridlines."""
+    if span <= 0:
+        return 0.5
     interval = span / target_count
     magnitude = 10 ** np.floor(np.log10(interval))
     residual = interval / magnitude
@@ -209,15 +204,15 @@ def _nice_interval(span, target_count=6):
 
 
 def draw_coordinate_grid(ax, extent_4326, line_kw=None):
-    """Draw graticule lines and coordinate labels around the map."""
     if line_kw is None:
         line_kw = {"linewidth": 0.4, "color": "#555555", "alpha": 0.5, "linestyle": "--"}
 
     west, east, south, north = extent_4326
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
 
     lon_interval = _nice_interval(east - west)
     lat_interval = _nice_interval(north - south)
-
     lon_interval = max(lon_interval, 0.0001)
     lat_interval = max(lat_interval, 0.0001)
 
@@ -229,37 +224,40 @@ def draw_coordinate_grid(ax, extent_4326, line_kw=None):
 
     for lon in lons:
         x1, y1 = _deg_to_3857(lon, south)
-        x2, y2 = _deg_to_3857(lon, north)
-        ax.plot([x1, x2], [y1, y2], **line_kw, zorder=2)
-
+        x2, y2 = _deg_to_3857(lon, east)
+        ax.plot([x1, x2], [y1, y2], zorder=2, **line_kw)
     for lat in lats:
         x1, y1 = _deg_to_3857(west, lat)
         x2, y2 = _deg_to_3857(east, lat)
-        ax.plot([x1, x2], [y1, y2], **line_kw, zorder=2)
+        ax.plot([x1, x2], [y1, y2], zorder=2, **line_kw)
 
-    xmin, xmax = ax.get_xlim()
-    ymin, ymax = ax.get_ylim()
-
-    lon_lbls = [l for l in lons if west - 0.5 <= l <= east + 0.5]
-    lat_lbls = [l for l in lats if south - 0.5 <= l <= north + 0.5]
+    lon_lbls = [l for l in lons if west <= l <= east]
+    lat_lbls = [l for l in lats if south <= l <= north]
 
     for lon in lon_lbls:
-        x, _ = _deg_to_3857(lon, (south + north) / 2)
+        x_data, _ = _deg_to_3857(lon, (south + north) / 2)
         ew = "E" if lon >= 0 else "W"
-        lbl = f"{abs(lon):.4f}°{ew}" if abs(lon) < 10 else f"{abs(lon):.2f}°{ew}"
-        ax.text(x, ymin - (ymax - ymin) * 0.025, lbl,
-                ha="center", va="top", fontsize=7.5, fontfamily="sans-serif")
-        ax.text(x, ymax + (ymax - ymin) * 0.015, lbl,
-                ha="center", va="bottom", fontsize=7.5, fontfamily="sans-serif")
-
+        label = f"{abs(lon):.4f}°{ew}" if abs(lon) < 10 else f"{abs(lon):.2f}°{ew}"
+        ax.annotate(label, xy=(x_data, ymin), xytext=(0, -8),
+                    textcoords="offset points", ha="center", va="top",
+                    fontsize=7, zorder=7,
+                    annotation_clip=False)
+        ax.annotate(label, xy=(x_data, ymax), xytext=(0, 6),
+                    textcoords="offset points", ha="center", va="bottom",
+                    fontsize=7, zorder=7,
+                    annotation_clip=False)
     for lat in lat_lbls:
-        _, y = _deg_to_3857((west + east) / 2, lat)
+        _, y_data = _deg_to_3857((west + east) / 2, lat)
         ns = "S" if lat < 0 else "N"
-        lbl = f"{abs(lat):.4f}°{ns}" if abs(lat) < 10 else f"{abs(lat):.2f}°{ns}"
-        ax.text(xmin - (xmax - xmin) * 0.025, y, lbl,
-                ha="right", va="center", fontsize=7.5, fontfamily="sans-serif")
-        ax.text(xmax + (xmax - xmin) * 0.015, y, lbl,
-                ha="left", va="center", fontsize=7.5, fontfamily="sans-serif")
+        label = f"{abs(lat):.4f}°{ns}" if abs(lat) < 10 else f"{abs(lat):.2f}°{ns}"
+        ax.annotate(label, xy=(xmin, y_data), xytext=(-8, 0),
+                    textcoords="offset points", ha="right", va="center",
+                    fontsize=7, zorder=7,
+                    annotation_clip=False)
+        ax.annotate(label, xy=(xmax, y_data), xytext=(6, 0),
+                    textcoords="offset points", ha="left", va="center",
+                    fontsize=7, zorder=7,
+                    annotation_clip=False)
 
 
 def add_map_border(ax):
@@ -450,6 +448,15 @@ def create_static_map(
         zorder=3,
     )
 
+    ctx.add_attribution(ax, "")
+
+    bounds_3857 = gdf_3857.total_bounds
+    margin_3857 = 0.06
+    xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
+    ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
+    ax.set_xlim(bounds_3857[0] - xm_3857, bounds_3857[2] + xm_3857)
+    ax.set_ylim(bounds_3857[1] - ym_3857, bounds_3857[3] + ym_3857)
+
     if include_border:
         add_map_border(ax)
 
@@ -464,8 +471,6 @@ def create_static_map(
 
     if include_north:
         add_north_arrow_map(ax, gdf_3857)
-
-    ctx.add_attribution(ax, "")
 
     if logo_path and os.path.exists(logo_path):
         logo_img = Image.open(logo_path)
