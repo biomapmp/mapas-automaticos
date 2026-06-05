@@ -429,7 +429,7 @@ def add_info_box(fig, project_name, map_name, gdf):
 
 def create_static_map(
     gdf, basemap_name, project_name, map_name, logo_path=None,
-    include_scale=True, include_north=True, include_grid=True,
+    include_scale=True, include_north=True, include_grid=False,
     include_legend=True, include_infobox=True, include_border=True,
 ):
     if gdf.crs is None:
@@ -600,7 +600,7 @@ def main():
 
         with col_a:
             export_dpi = st.selectbox("Resolución de exportación", [150, 200, 300], index=1)
-            include_grid = st.checkbox("Marco de coordenadas", value=True)
+            include_grid = st.checkbox("Marco de coordenadas", value=False)
             include_border = st.checkbox("Recuadro del mapa", value=True)
 
         with col_b:
