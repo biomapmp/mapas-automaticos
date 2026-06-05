@@ -283,10 +283,10 @@ def add_title_box(fig, map_name, project_name):
 
     title_text = "\n".join(text_lines)
     fig.text(
-        0.02, 0.95, title_text,
-        fontsize=16, fontweight="bold", fontfamily="sans-serif",
-        va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
+        0.5, 0.97, title_text,
+        fontsize=18, fontweight="bold", fontfamily="sans-serif",
+        va="top", ha="center",
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.85),
     )
 
 
@@ -377,22 +377,24 @@ def add_legend(fig, ax, gdf_m):
 
 
 def add_info_box(fig, project_name, map_name, gdf):
-    """Add an information box with project details."""
     area_3857 = gdf.to_crs("EPSG:3857")
     total_area_km2 = area_3857.area.sum() / 1_000_000
+    perimeter_m = area_3857.length.sum()
+    perimeter_km = perimeter_m / 1000
 
     lines = []
     lines.append(f"Proyecto: {project_name}")
     lines.append(f"Mapa: {map_name}")
     lines.append(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}")
     lines.append(f"Superficie: {total_area_km2:,.2f} km²")
+    lines.append(f"Perímetro: {perimeter_km:,.2f} km")
     info_text = "\n".join(lines)
 
     fig.text(
-        0.78, 0.04, info_text,
-        fontsize=8, fontfamily="sans-serif",
+        0.78, 0.07, info_text,
+        fontsize=10, fontfamily="sans-serif",
         va="bottom", ha="left",
-        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.9),
+        bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor="black", alpha=0.9),
     )
 
 
@@ -420,9 +422,9 @@ def create_static_map(
     fig = plt.figure(figsize=(16, 11))
 
     left = 0.1
-    bottom = 0.1
+    bottom = 0.14
     map_w = 0.75
-    map_h = 0.78
+    map_h = 0.72
 
     ax = fig.add_axes([left, bottom, map_w, map_h])
 
