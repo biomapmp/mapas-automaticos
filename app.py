@@ -9,6 +9,7 @@ import geopandas as gpd
 import folium
 from folium import plugins
 from streamlit_folium import st_folium
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties, fontManager
@@ -59,17 +60,19 @@ ctx_providers = {
 }
 
 
+LABEL_COLUMNS = ["name", "nombre", "Name", "NOMBRE", "label", "etiqueta", "desc", "descripcion", "Descripcion"]
+
 LAYER_COLORS = [
-    ("#4CAF50", "#2E7D32"),
-    ("#2196F3", "#1565C0"),
-    ("#FF9800", "#E65100"),
-    ("#9C27B0", "#6A1B9A"),
-    ("#F44336", "#C62828"),
-    ("#00BCD4", "#00838F"),
-    ("#FFC107", "#FF8F00"),
-    ("#607D8B", "#37474F"),
-    ("#E91E63", "#AD1457"),
-    ("#8BC34A", "#558B2F"),
+    ("#FF1744", "#C62828"),  # Rojo
+    ("#FF9100", "#E65100"),  # Naranja
+    ("#2979FF", "#1565C0"),  # Azul
+    ("#FFEA00", "#8C6B00"),  # Amarillo
+    ("#D500F9", "#6A1B9A"),  # Púrpura
+    ("#00E5FF", "#00838F"),  # Cian
+    ("#FF4081", "#C2185B"),  # Rosa
+    ("#00E676", "#2E7D32"),  # Verde
+    ("#FF3D00", "#BF360C"),  # Naranja intenso
+    ("#651FFF", "#311B92"),  # Púrpura intenso
 ]
 
 
@@ -144,7 +147,7 @@ def load_polygon(uploaded_file):
         )
 
 
-def create_interactive_map(layers, basemap_name, project_name, map_name):
+def create_interactive_map(layers, basemap_name, project_name, map_name, include_labels=False):
     if not layers:
         return None
 
@@ -179,10 +182,16 @@ def create_interactive_map(layers, basemap_name, project_name, map_name):
             "weight": 2,
             "fillOpacity": 0.35,
         }
+        tooltip = None
+        if include_labels:
+            label_col = _detect_label_column(gdf)
+            if label_col is not None:
+                tooltip = folium.GeoJsonTooltip(fields=[label_col], labels=False, sticky=True)
         geo_json = folium.GeoJson(
             gdf.to_json(),
             style_function=lambda x, s=style: s,
             name=layer_name,
+            tooltip=tooltip,
         )
         geo_json.add_to(m)
 
@@ -329,7 +338,7 @@ def add_title_box(fig, map_name, project_name):
     title_text = "\n".join(text_lines)
     fig.text(
         0.5, 0.97, title_text,
-        fontsize=18, fontweight="bold", color="#111111",
+        fontsize=14, fontweight="bold", color="#111111",
         va="top", ha="center",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
     )
@@ -409,15 +418,16 @@ def add_legend(fig, ax, layers):
             Line2D([0], [0], marker="s", color="w", markerfacecolor=fill_color,
                    markeredgecolor=edge_color, markersize=10, label=label),
         )
-    leg = ax.legend(
+    leg = fig.legend(
         handles=legend_elem,
-        loc="lower right",
-        fontsize=9,
+        loc="upper left",
+        bbox_to_anchor=(0.02, 0.65),
+        fontsize=10,
         framealpha=0.9,
         edgecolor="black",
         facecolor="white",
         title="Leyenda",
-        title_fontsize=10,
+        title_fontsize=11,
     )
     leg.get_title().set_fontweight("bold")
 
@@ -448,21 +458,29 @@ def add_info_box(fig, project_name, map_name, layers):
 
     fig.text(
         0.02, 0.87, "Departamento Técnico",
-        fontsize=9, fontweight="bold", color=NATURA_GREEN,
+        fontsize=12, fontweight="bold", fontproperties=FontProperties(family=FONT_FAMILY, size=12), color=NATURA_GREEN,
         va="top", ha="left",
     )
     fig.text(
-        0.02, 0.853, data_text,
-        fontsize=9, fontproperties=FontProperties(family=FONT_FAMILY, size=9), color=DARK,
+        0.02, 0.84, data_text,
+        fontsize=12, fontproperties=FontProperties(family=FONT_FAMILY, size=12, weight="bold"), color=DARK,
         va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="white", edgecolor=NATURA_GREEN, alpha=0.95, linewidth=1.2),
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", edgecolor=NATURA_GREEN, alpha=0.95, linewidth=1.2),
     )
+
+
+def _detect_label_column(gdf):
+    for col in LABEL_COLUMNS:
+        if col in gdf.columns:
+            return col
+    return None
 
 
 def create_static_map(
     layers, basemap_name, project_name, map_name, logo_path=None,
     include_scale=True, include_north=True, include_grid=False,
     include_legend=True, include_infobox=True, include_border=True,
+    include_labels=False,
 ):
     if not layers:
         return None
@@ -470,16 +488,28 @@ def create_static_map(
     gdfs_4326 = []
     gdfs_3857 = []
     for gdf, _name, _fc, _ec in layers:
+        if gdf.empty:
+            continue
         g = gdf.copy()
         if g.crs is None:
             g = g.set_crs("EPSG:4326")
-        gdfs_4326.append(g.to_crs("EPSG:4326"))
-        gdfs_3857.append(g.to_crs("EPSG:3857"))
+        g_4326 = g.to_crs("EPSG:4326")
+        g_3857 = g.to_crs("EPSG:3857")
+        if g_4326.empty or g_3857.empty:
+            continue
+        gdfs_4326.append(g_4326)
+        gdfs_3857.append(g_3857)
+
+    if not gdfs_4326:
+        raise ValueError("Ninguna capa contiene geometrías válidas después de la reproyección.")
 
     merged_4326 = gpd.pd.concat(gdfs_4326, ignore_index=True)
     merged_3857 = gpd.pd.concat(gdfs_3857, ignore_index=True)
 
     bounds_4326 = merged_4326.total_bounds
+    if not np.all(np.isfinite(bounds_4326)):
+        raise ValueError("Los límites geográficos calculados contienen valores inválidos (NaN/Inf). Revisa la proyección de tus archivos.")
+
     margin = 0.06
     xm = (bounds_4326[2] - bounds_4326[0]) * margin
     ym = (bounds_4326[3] - bounds_4326[1]) * margin
@@ -499,6 +529,9 @@ def create_static_map(
     ax = fig.add_axes([map_left, map_bottom, map_w, map_h])
 
     bounds_3857 = merged_3857.total_bounds
+    if not np.all(np.isfinite(bounds_3857)):
+        raise ValueError("Los límites del mapa en proyección Mercator contienen valores inválidos. Revisa la proyección de tus archivos.")
+
     margin_3857 = 0.05
     xm_3857 = (bounds_3857[2] - bounds_3857[0]) * margin_3857
     ym_3857 = (bounds_3857[3] - bounds_3857[1]) * margin_3857
@@ -531,7 +564,37 @@ def create_static_map(
             zorder=3,
         )
 
+        if include_labels:
+            label_col = _detect_label_column(g)
+            if label_col is not None:
+                for _, row in g.iterrows():
+                    if pd.isna(row[label_col]):
+                        continue
+                    geom = row.geometry
+                    if geom is None or geom.is_empty:
+                        continue
+                    if geom.geom_type in ("Point", "MultiPoint"):
+                        if geom.geom_type == "MultiPoint":
+                            xy = geom.centroid
+                        else:
+                            xy = geom
+                    else:
+                        xy = geom.representative_point()
+                    ax.annotate(
+                        str(row[label_col]),
+                        xy=(xy.x, xy.y),
+                        fontsize=6,
+                        color="black",
+                        weight="bold",
+                        ha="center",
+                        va="bottom",
+                        zorder=10,
+                        bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                                  edgecolor="none", alpha=0.7),
+                    )
+
     ctx.add_attribution(ax, "")
+    ax.tick_params(left=False, labelleft=False, bottom=False, labelbottom=False)
 
     if include_border:
         add_map_border(ax)
@@ -620,7 +683,8 @@ def main():
                     if layers:
                         st.session_state["layers"] = layers
                         m = create_interactive_map(
-                            layers, basemap_name, project_name, map_name
+                            layers, basemap_name, project_name, map_name,
+                            include_labels=True,
                         )
                         if m:
                             st_folium(m, width=None, height=500)
@@ -654,6 +718,7 @@ def main():
             include_scale = st.checkbox("Barra de escala", value=True)
             include_north = st.checkbox("Flecha de norte", value=True)
             include_infobox = st.checkbox("Caja de información", value=True)
+            include_labels = st.checkbox("Etiquetas", value=False)
 
         if st.button("Generar mapa estático (PNG)", type="primary", use_container_width=True):
             with st.spinner("Generando mapa estático..."):
@@ -681,6 +746,7 @@ def main():
                         include_grid=include_grid,
                         include_border=include_border,
                         include_infobox=include_infobox,
+                        include_labels=include_labels,
                     )
 
                     buf = io.BytesIO()
@@ -726,6 +792,7 @@ def main():
                     basemap_name,
                     project_name,
                     map_name,
+                    include_labels=include_labels,
                 )
                 html_bytes = m._repr_html_().encode("utf-8")
                 st.download_button(
