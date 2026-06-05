@@ -405,6 +405,7 @@ def add_info_box(fig, project_name, map_name, gdf):
     perimeter_km = perimeter_m / 1000
 
     lines = []
+    lines.append("Departamento Técnico")
     lines.append(f"Proyecto: {project_name}")
     lines.append(f"Mapa: {map_name}")
     lines.append(f"Superficie: {total_area_km2:,.2f} km²")
@@ -412,10 +413,15 @@ def add_info_box(fig, project_name, map_name, gdf):
     info_text = "\n".join(lines)
 
     fig.text(
-        0.02, 0.92, info_text,
-        fontsize=10, fontproperties=FontProperties(family=FONT_FAMILY, size=10), color="#111111",
+        0.02, 0.87, "Departamento Técnico",
+        fontsize=9, fontweight="bold", color="#111111",
         va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="black", alpha=0.9),
+    )
+    fig.text(
+        0.02, 0.84, "\n".join(lines[1:]),
+        fontsize=9, fontproperties=FontProperties(family=FONT_FAMILY, size=9), color="#111111",
+        va="top", ha="left",
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="white", edgecolor="black", alpha=0.9),
     )
 
 
