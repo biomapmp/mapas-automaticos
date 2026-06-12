@@ -732,6 +732,13 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
             name=layer_name,
             tooltip=tooltip,
             layer_id=f"layer_{i}",
+            marker=folium.CircleMarker(
+                radius=6,
+                color=edge_color,
+                fill_color=fill_color,
+                weight=2,
+                fill_opacity=0.6,
+            ),
         )
         geo_json.add_to(m)
 
