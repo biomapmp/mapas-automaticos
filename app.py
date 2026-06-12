@@ -132,10 +132,10 @@ def _build_interactive_template(
         header_title_text += f" · {project_display}"
 
     template = f'''
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, sans-serif; background: #eef2f0; color: #1e2a1e; }}
+        body {{ font-family: 'Montserrat', 'Segoe UI', Roboto, Helvetica, sans-serif; background: #eef2f0; color: #1e2a1e; }}
         .top-header {{
             position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
             background: #1f3b2c; color: white;
@@ -324,13 +324,13 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Print Layout - {title_display}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/utif/3.1.0/UTIF.min.js"></script>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
-body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
+body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
 
 .print-layout {{
     width: 1200px; height: 900px;
@@ -396,7 +396,7 @@ body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
 }}
 .export-btn {{
     padding: 7px 14px; border: none; border-radius: 6px;
-    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px;
+    font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 12px;
     cursor: pointer; color: white; transition: opacity 0.2s;
 }}
 .export-btn:hover {{ opacity: 0.85; }}
