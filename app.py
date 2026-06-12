@@ -519,21 +519,19 @@ async function captureLayout() {{
     var layout = document.getElementById('printLayout');
     var iframe = document.getElementById('mapIframe');
     if (!layout || !iframe) return null;
+    var sc = 2;
     try {{
-        var sc = 2;
         var layoutCanvas = await html2canvas(layout, {{
             scale: sc, useCORS: true, allowTaint: false,
             backgroundColor: '#ffffff', logging: false,
-            width: layout.scrollWidth, height: layout.scrollHeight,
         }});
         var ctx = layoutCanvas.getContext('2d');
         try {{
             var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            var mapCanvas = await html2canvas(iframeDoc.body, {{
+            var mapContainer = iframeDoc.querySelector('[id^="map_"]') || iframeDoc.body;
+            var mapCanvas = await html2canvas(mapContainer, {{
                 scale: sc, useCORS: true, allowTaint: false,
                 backgroundColor: '#e8ece8',
-                width: iframeDoc.body.scrollWidth,
-                height: iframeDoc.body.scrollHeight,
             }});
             var lr = layout.getBoundingClientRect();
             var ir = iframe.getBoundingClientRect();
@@ -557,15 +555,23 @@ async function exportFormat(format) {{
             pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
             pdf.save(fn + '.pdf');
         }} else if (format === 'tiff') {{
-            var ctx = canvas.getContext('2d');
-            var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var tiffData = UTIF.encode(imgData.data, canvas.width, canvas.height);
-            var blob = new Blob([tiffData], {{type: 'image/tiff'}});
-            var link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = fn + '.tiff';
-            link.click();
-            URL.revokeObjectURL(link.href);
+            try {{
+                var ctx2 = canvas.getContext('2d');
+                var imgData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
+                var tiffData = UTIF.encodeImage(imgData.data, canvas.width, canvas.height);
+                var blob = new Blob([tiffData], {{type: 'image/tiff'}});
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fn + '.tiff';
+                link.click();
+                URL.revokeObjectURL(link.href);
+            }} catch(et) {{
+                alert('TIFF no disponible, se descargó PNG como alternativa');
+                var link = document.createElement('a');
+                link.download = fn + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }}
         }} else {{
             var mime = {{png:'image/png',jpeg:'image/jpeg',webp:'image/webp'}}[format] || 'image/png';
             var ext = {{png:'png',jpeg:'jpg',webp:'webp'}}[format] || 'png';
