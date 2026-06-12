@@ -351,7 +351,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
     border-right: 1px solid #d4ddd0;
     overflow: hidden;
 }}
-.panel-logo {{ max-width: 90%; max-height: 55px; object-fit: contain; margin-bottom: 10px; }}
+.panel-logo {{ max-width: 70px; max-height: 35px; object-fit: contain; display: block; margin: 0 auto 2px auto; }}
 .panel-title {{ font-size: 21px; font-weight: 800; color: #1f3b2c; margin-bottom: 1px; line-height: 1.2; }}
 .panel-project {{ font-size: 14px; font-weight: 500; color: #4d6b4d; margin-bottom: 3px; }}
 .panel-area {{ font-size: 12px; color: #3c6e3f; margin-bottom: 6px; }}
@@ -386,7 +386,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .scale-label {{ font-size: 10px; font-weight: 700; color: #333; }}
 
 .credits {{
-    margin-top: 5px; font-size: 7.5px; color: #7a8f7a; line-height: 1.4;
+    margin-top: 5px; font-size: 7.5px; color: #7a8f7a; line-height: 1.4; text-align: center;
 }}
 
 .map-area {{
@@ -432,7 +432,6 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 
 <div class="print-layout" id="printLayout">
     <div class="left-panel">
-        {logo_html}
         <div class="panel-title">{title_display}</div>
         {f'<div class="panel-project">{project_display}</div>' if project_display else ''}
         {f'<div class="panel-area">Superficie: {area_ha_str} ha</div>' if area_ha_str else ''}
@@ -479,6 +478,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
             </div>
         </div>
         <div class="credits">
+            {logo_html}
             &copy; Natura Argentina<br>
             www.{NATURA_WEB}<br>
             {NATURA_ADDRESS}
