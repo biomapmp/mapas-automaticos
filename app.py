@@ -16,8 +16,9 @@ LOGO_DEFAULT = os.path.join(os.path.dirname(__file__), "logo_default.png")
 
 BASEMAPS = {
     "ESRI Satellite": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    "OpenStreetMap": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "Google Satellite": "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
     "Google Hybrid": "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+    "OpenStreetMap": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     "ESRI Topo": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     "CartoDB Positron": "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     "ESRI Gray": "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
@@ -25,12 +26,15 @@ BASEMAPS = {
 
 BASEMAP_ATTRS = {
     "ESRI Satellite": "Esri",
-    "OpenStreetMap": "OpenStreetMap",
+    "Google Satellite": "Google",
     "Google Hybrid": "Google",
+    "OpenStreetMap": "OpenStreetMap",
     "ESRI Topo": "Esri",
     "CartoDB Positron": "CartoDB",
     "ESRI Gray": "Esri",
 }
+
+BASEMAP_SWITCHER = ["ESRI Satellite", "Google Satellite", "Google Hybrid", "OpenStreetMap"]
 
 
 LABEL_COLUMNS = ["name", "nombre", "Name", "NOMBRE", "label", "etiqueta", "desc", "descripcion", "Descripcion"]
@@ -218,7 +222,7 @@ www.naturainternational.org`;
     return template
 
 
-def _build_print_template(fig_map_html, layers, project_name, map_name, logo_path=None):
+def _build_print_template(fig_map_html, layers, project_name, map_name, logo_path=None, basemap_variants=None, basemap_name=None):
     """Build a self-contained print-layout HTML with left panel + map + layer toggles + export."""
     total_area_ha = 0.0
     total_area_km2 = 0.0
@@ -321,6 +325,14 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
     # Escape the folium HTML for embedding in JS template literal
     folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
+    basemap_variants_escaped = {}
+    if basemap_variants:
+        for bm, bhtml in basemap_variants.items():
+            basemap_variants_escaped[bm] = bhtml.replace('</script>', '<\\/script>')
+    else:
+        basemap_variants_escaped[basemap_name] = fig_map_html.replace('</script>', '<\\/script>')
+    basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False)
+
     html = f'''<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -351,7 +363,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
     border-right: 1px solid #d4ddd0;
     overflow: hidden;
 }}
-.panel-logo {{ max-width: 100px; max-height: 50px; object-fit: contain; display: block; margin: 0 auto 4px auto; }}
+.panel-logo {{ max-width: 120px; max-height: 60px; object-fit: contain; display: block; margin: 0 0 4px 0; }}
 .panel-title {{ font-size: 21px; font-weight: 800; color: #1f3b2c; margin-bottom: 1px; line-height: 1.2; }}
 .panel-project {{ font-size: 14px; font-weight: 500; color: #4d6b4d; margin-bottom: 3px; }}
 .panel-area {{ font-size: 12px; color: #3c6e3f; margin-bottom: 6px; }}
@@ -372,9 +384,8 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .iv {{ color: #1c2c1a; }}
 
 .scale-section {{ margin-top: auto; padding-top: 6px; }}
-.scale-title-row {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }}
 .scale-title {{ font-size: 12px; font-weight: 600; color: #3c6e3f; }}
-.dept-title {{ font-size: 12px; font-weight: 700; color: #3c6e3f; }}
+.dept-title {{ font-size: 12px; font-weight: 700; color: #3c6e3f; margin-top: 6px; }}
 .scale-bar-wrap {{ display: flex; align-items: center; gap: 6px; }}
 .compass-mini {{ display: flex; flex-direction: column; align-items: center; margin-right: 6px; }}
 .compass-mini svg {{ width: 32px; height: 32px; }}
@@ -388,7 +399,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .scale-label {{ font-size: 10px; font-weight: 700; color: #333; }}
 
 .credits {{
-    margin-top: 5px; font-size: 7.5px; color: #7a8f7a; line-height: 1.4; text-align: center;
+    margin-top: 5px; font-size: 7.5px; color: #7a8f7a; line-height: 1.4;
 }}
 
 .map-area {{
@@ -414,6 +425,10 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .btn-webp {{ background: #1565C0; }}
 .btn-pdf {{ background: #c22d2d; }}
 .btn-print {{ background: #555; }}
+.basemap-sep {{ color: #bbb; font-size: 18px; margin: 0 4px; }}
+.basemap-label {{ font-size: 11px; font-weight: 600; color: #3c6e3f; font-family: 'Montserrat', sans-serif; }}
+.basemap-opt {{ font-size: 11px; color: #333; cursor: pointer; font-family: 'Montserrat', sans-serif; }}
+.basemap-opt input {{ accent-color: #4c9f70; margin-right: 2px; }}
 
 @media print {{
     .export-bar {{ display: none !important; }}
@@ -430,6 +445,12 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
     <button class="export-btn btn-webp" onclick="exportFormat('webp')">WEBP</button>
     <button class="export-btn btn-pdf" onclick="exportFormat('pdf')">PDF</button>
     <button class="export-btn btn-print" onclick="window.print()">Imprimir</button>
+    <span class="basemap-sep">|</span>
+    <span class="basemap-label">Base:</span>
+    <label class="basemap-opt"><input type="radio" name="basemap" value="ESRI Satellite" checked onclick="switchBasemap(this.value)"> Esri</label>
+    <label class="basemap-opt"><input type="radio" name="basemap" value="Google Satellite" onclick="switchBasemap(this.value)"> G Sat</label>
+    <label class="basemap-opt"><input type="radio" name="basemap" value="Google Hybrid" onclick="switchBasemap(this.value)"> Hybrid</label>
+    <label class="basemap-opt"><input type="radio" name="basemap" value="OpenStreetMap" onclick="switchBasemap(this.value)"> OSM</label>
 </div>
 
 <div class="print-layout" id="printLayout">
@@ -456,10 +477,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
         <hr class="panel-sep">
 
         <div class="scale-section">
-            <div class="scale-title-row">
-                <div class="scale-title">Escala gráfica</div>
-                <div class="dept-title">Departamento Técnico</div>
-            </div>
+            <div class="scale-title">Escala gráfica</div>
             <div class="scale-bar-wrap">
                 <div class="compass-mini">
                     <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
@@ -481,6 +499,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
                 <div class="scale-bar-line"></div>
                 <span class="scale-label">10 km</span>
             </div>
+            <div class="dept-title">Departamento Técnico</div>
         </div>
         <div class="credits">
             {logo_html}
@@ -499,13 +518,21 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 </div>
 
 <script>
-var foliumHtml = {folium_json_str};
+var basemapHtml = {basemap_variants_json};
+var foliumHtml = basemapHtml[Object.keys(basemapHtml)[0]];
 document.getElementById('mapIframe').srcdoc = foliumHtml;
 
 function toggleLayer(layerId, visible) {{
     var iframe = document.getElementById('mapIframe');
     if (iframe && iframe.contentWindow) {{
         iframe.contentWindow.postMessage({{type:'toggleLayer', layerId:layerId, visible:visible}}, '*');
+    }}
+}}
+
+function switchBasemap(name) {{
+    var iframe = document.getElementById('mapIframe');
+    if (iframe) {{
+        iframe.srcdoc = basemapHtml[name] || foliumHtml;
     }}
 }}
 
@@ -690,6 +717,17 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
         attr=attr,
     )
 
+    for name in BASEMAP_SWITCHER:
+        if name != basemap_name:
+            folium.TileLayer(
+                tiles=BASEMAPS[name],
+                name=name,
+                attr=BASEMAP_ATTRS.get(name, ""),
+                overlay=False,
+                control=True,
+            ).add_to(m)
+    folium.LayerControl(collapsed=True).add_to(m)
+
     for i, (gdf, layer_name, fill_color, edge_color) in enumerate(layers):
         if gdf.crs.to_string() != "EPSG:4326":
             gdf = gdf.to_crs("EPSG:4326")
@@ -742,8 +780,27 @@ window.__toggleLayer = function(layerId, visible) {
 window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'toggleLayer') {
         window.__toggleLayer(e.data.layerId, e.data.visible);
+    } else if (e.data && e.data.type === 'switchBasemap') {
+        window.__switchBasemap(e.data.name);
     }
 });
+window.__switchBasemap = function(name) {
+    try {
+        var m = null;
+        for (var k in window) {
+            if (k.indexOf('map_') === 0 && window[k] && window[k].eachLayer) {
+                m = window[k]; break;
+            }
+        }
+        if (!m) return;
+        m.eachLayer(function(layer) {
+            if (layer instanceof L.TileLayer) {
+                if (layer.options.name === name) m.addLayer(layer);
+                else m.removeLayer(layer);
+            }
+        });
+    } catch(e) { console.warn('basemap:', e); }
+};
 </script>"""
     m.get_root().html.add_child(folium.Element(toggle_js))
 
@@ -763,7 +820,14 @@ def generate_print_template(layers, basemap_name, project_name, map_name, includ
     if folium_map is None:
         return None
     folium_html = folium_map.get_root().render()
-    print_html = _build_print_template(folium_html, layers, project_name, map_name, logo_path=logo_path)
+    basemap_variants = {}
+    for bm in BASEMAP_SWITCHER:
+        fm = create_interactive_map(layers, bm, project_name, map_name,
+                                    include_labels=include_labels, logo_path=logo_path)
+        if fm:
+            basemap_variants[bm] = fm.get_root().render()
+    print_html = _build_print_template(folium_html, layers, project_name, map_name, logo_path=logo_path,
+                                       basemap_variants=basemap_variants, basemap_name=basemap_name)
     return print_html
 
 def _detect_label_column(gdf):
