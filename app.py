@@ -351,7 +351,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
     border-right: 1px solid #d4ddd0;
     overflow: hidden;
 }}
-.panel-logo {{ max-width: 70px; max-height: 35px; object-fit: contain; display: block; margin: 0 auto 2px auto; }}
+.panel-logo {{ max-width: 100px; max-height: 50px; object-fit: contain; display: block; margin: 0 auto 4px auto; }}
 .panel-title {{ font-size: 21px; font-weight: 800; color: #1f3b2c; margin-bottom: 1px; line-height: 1.2; }}
 .panel-project {{ font-size: 14px; font-weight: 500; color: #4d6b4d; margin-bottom: 3px; }}
 .panel-area {{ font-size: 12px; color: #3c6e3f; margin-bottom: 6px; }}
@@ -372,7 +372,9 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .iv {{ color: #1c2c1a; }}
 
 .scale-section {{ margin-top: auto; padding-top: 6px; }}
-.scale-title {{ font-size: 12px; font-weight: 600; color: #3c6e3f; margin-bottom: 3px; }}
+.scale-title-row {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }}
+.scale-title {{ font-size: 12px; font-weight: 600; color: #3c6e3f; }}
+.dept-title {{ font-size: 12px; font-weight: 700; color: #3c6e3f; }}
 .scale-bar-wrap {{ display: flex; align-items: center; gap: 6px; }}
 .compass-mini {{ display: flex; flex-direction: column; align-items: center; margin-right: 6px; }}
 .compass-mini svg {{ width: 32px; height: 32px; }}
@@ -454,7 +456,10 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
         <hr class="panel-sep">
 
         <div class="scale-section">
-            <div class="scale-title">Escala gráfica</div>
+            <div class="scale-title-row">
+                <div class="scale-title">Escala gráfica</div>
+                <div class="dept-title">Departamento Técnico</div>
+            </div>
             <div class="scale-bar-wrap">
                 <div class="compass-mini">
                     <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
