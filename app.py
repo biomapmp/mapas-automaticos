@@ -151,8 +151,23 @@ def _build_interactive_template(
         .legend-line {{ width: 24px; height: 3px; display: inline-block; border-radius: 2px; flex-shrink: 0; }}
         .circle-marker {{ width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid; display: inline-block; flex-shrink: 0; }}
         .legend-footer-small {{ font-size: 0.6rem; margin-top: 8px; text-align: center; color: #5b6e53; border-top: 1px solid #e0e2d4; padding-top: 5px; }}
+        .north-arrow {{
+            position: absolute; bottom: 80px; right: 20px; z-index: 1000;
+            width: 40px; height: 40px; pointer-events: none;
+            display: flex; flex-direction: column; align-items: center;
+            font-family: 'Montserrat', sans-serif;
+        }}
+        .north-arrow svg {{ width: 28px; height: 28px; }}
+        .north-label {{ font-size: 11px; font-weight: 700; color: #333; line-height: 1; }}
         .footer-credits {{ position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000; background: #eaf2e5; font-size: 0.6rem; text-align: center; padding: 4px; color: #2b482f; border-top: 1px solid #c7dcb4; font-family: monospace; min-height: 22px; }}
     </style>
+    <div class="north-arrow">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="12,2 4,22 12,16 20,22" fill="#333" stroke="#333" stroke-width="0.5"/>
+            <polygon points="12,2 12,16 20,22" fill="#666" stroke="#333" stroke-width="0.5"/>
+        </svg>
+        <span class="north-label">N</span>
+    </div>
     <div class="legend-card">
         <h4>Referencias cartográficas</h4>
         <ul class="legend-list">
@@ -336,6 +351,9 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .scale-section {{ margin-top: auto; padding-top: 6px; }}
 .scale-title {{ font-size: 12px; font-weight: 600; color: #3c6e3f; margin-bottom: 3px; }}
 .scale-bar-wrap {{ display: flex; align-items: center; gap: 6px; }}
+.north-mini {{ display: flex; flex-direction: column; align-items: center; margin-right: 8px; }}
+.north-mini svg {{ width: 22px; height: 22px; }}
+.north-mini span {{ font-size: 9px; font-weight: 700; color: #333; line-height: 1; }}
 .scale-bar-line {{ height: 3px; background: black; width: 140px; position: relative; }}
 .scale-bar-line::before, .scale-bar-line::after {{
     content: ''; position: absolute; top: -5px;
@@ -417,6 +435,13 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
         <div class="scale-section">
             <div class="scale-title">Escala gráfica</div>
             <div class="scale-bar-wrap">
+                <div class="north-mini">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="12,2 4,22 12,16 20,22" fill="#555"/>
+                        <polygon points="12,2 12,16 20,22" fill="#999"/>
+                    </svg>
+                    <span>N</span>
+                </div>
                 <div class="scale-bar-line"></div>
                 <span class="scale-label">10 km</span>
             </div>
