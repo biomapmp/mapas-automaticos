@@ -138,9 +138,7 @@ def _build_interactive_template(
     template = f'''
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Montserrat', 'Segoe UI', Roboto, Helvetica, sans-serif; background: #eef2f0; color: #1e2a1e; }}
-        #map {{ height: 100%; width: 100%; z-index: 1; }}
         .info-card {{ position: absolute; bottom: 20px; right: 20px; width: 280px; max-width: calc(100% - 40px); background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding: 0.9rem 1.1rem; border-left: 5px solid #4c9f70; z-index: 10; font-size: 0.78rem; pointer-events: auto; }}
         .info-card h3 {{ font-size: 1rem; font-weight: 700; margin: 0 0 0.4rem 0; color: #1e3b2a; border-bottom: 2px solid #e0e7cf; display: inline-block; padding-right: 1rem; }}
         .info-card p {{ margin: 0.4rem 0; line-height: 1.4; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }}
@@ -202,22 +200,12 @@ def _build_interactive_template(
         <p><span class="info-label">Fecha:</span><span class="info-value">{today_str}</span></p>
         {location_info}
         <div class="info-footer">
-            <div id="qrContainer" style="margin-bottom:4px;"></div>
             Datos técnicos de campo · Relevamiento Natura Argentina
         </div>
     </div>
     <div class="footer-credits">
         www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script>
-    const qrData = `Departamento Técnico
-Ingeniero L\u00f3pez 236. Torre 2. Piso 6-A
-C\u00f3rdoba. Argentina. C.P 5000.
-Natura ARGENTINA
-www.naturainternational.org`;
-    new QRCode(document.getElementById("qrContainer"), {{ text: qrData, width: 90, height: 90 }});
-    </script>
     '''
     return template
 
@@ -325,13 +313,8 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
     # Escape the folium HTML for embedding in JS template literal
     folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
-    basemap_variants_escaped = {}
-    if basemap_variants:
-        for bm, bhtml in basemap_variants.items():
-            basemap_variants_escaped[bm] = bhtml.replace('</script>', '<\\/script>')
-    else:
-        basemap_variants_escaped[basemap_name] = fig_map_html.replace('</script>', '<\\/script>')
-    basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False)
+    basemap_variants_escaped = basemap_variants or {basemap_name: fig_map_html}
+    basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False).replace('</script>', '<\\/script>')
 
     html = f'''<!DOCTYPE html>
 <html lang="es">
@@ -343,7 +326,6 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/utif/3.1.0/UTIF.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
@@ -425,10 +407,10 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
 .btn-webp {{ background: #1565C0; }}
 .btn-pdf {{ background: #c22d2d; }}
 .btn-print {{ background: #555; }}
-.basemap-sep {{ color: #bbb; font-size: 18px; margin: 0 4px; }}
-.basemap-label {{ font-size: 11px; font-weight: 600; color: #3c6e3f; font-family: 'Montserrat', sans-serif; }}
-.basemap-opt {{ font-size: 11px; color: #333; cursor: pointer; font-family: 'Montserrat', sans-serif; }}
-.basemap-opt input {{ accent-color: #4c9f70; margin-right: 2px; }}
+.basemap-title {{ font-size: 15px; font-weight: 700; color: #2d4a26; margin-bottom: 4px; }}
+.basemap-group {{ display: flex; flex-direction: column; gap: 2px; }}
+.basemap-item {{ font-size: 11px; color: #333; cursor: pointer; font-family: 'Montserrat', sans-serif; }}
+.basemap-item input {{ accent-color: #4c9f70; margin-right: 4px; }}
 
 @media print {{
     .export-bar {{ display: none !important; }}
@@ -445,12 +427,6 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
     <button class="export-btn btn-webp" onclick="exportFormat('webp')">WEBP</button>
     <button class="export-btn btn-pdf" onclick="exportFormat('pdf')">PDF</button>
     <button class="export-btn btn-print" onclick="window.print()">Imprimir</button>
-    <span class="basemap-sep">|</span>
-    <span class="basemap-label">Base:</span>
-    <label class="basemap-opt"><input type="radio" name="basemap" value="ESRI Satellite" checked onclick="switchBasemap(this.value)"> Esri</label>
-    <label class="basemap-opt"><input type="radio" name="basemap" value="Google Satellite" onclick="switchBasemap(this.value)"> G Sat</label>
-    <label class="basemap-opt"><input type="radio" name="basemap" value="Google Hybrid" onclick="switchBasemap(this.value)"> Hybrid</label>
-    <label class="basemap-opt"><input type="radio" name="basemap" value="OpenStreetMap" onclick="switchBasemap(this.value)"> OSM</label>
 </div>
 
 <div class="print-layout" id="printLayout">
@@ -460,7 +436,16 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
         {f'<div class="panel-area">Superficie: {area_ha_str} ha</div>' if area_ha_str else ''}
         <hr class="panel-sep">
 
-        <div class="legend-title">Referencias</div>
+        <div class="basemap-title">Mapa base</div>
+        <div class="basemap-group">
+            <label class="basemap-item"><input type="radio" name="basemap" value="ESRI Satellite" checked onchange="switchBasemap(this.value)"> Esri Satélite</label>
+            <label class="basemap-item"><input type="radio" name="basemap" value="Google Satellite" onchange="switchBasemap(this.value)"> Google Satélite</label>
+            <label class="basemap-item"><input type="radio" name="basemap" value="Google Hybrid" onchange="switchBasemap(this.value)"> Google Híbrido</label>
+            <label class="basemap-item"><input type="radio" name="basemap" value="OpenStreetMap" onchange="switchBasemap(this.value)"> OpenStreetMap</label>
+        </div>
+        <hr class="panel-sep">
+
+        <div class="legend-title">Capas</div>
         <div id="legendContainer">
         {legend_items_html}
         </div>
@@ -506,9 +491,6 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
             &copy; Natura Argentina<br>
             www.{NATURA_WEB}<br>
             {NATURA_ADDRESS}
-        </div>
-        <div style="display:flex;justify-content:center;margin-top:4px;">
-            <div id="qrPrint" style="width:60px;height:60px;"></div>
         </div>
     </div>
 
@@ -572,12 +554,6 @@ async function exportFormat(format) {{
         }}
     }} catch(e) {{ alert('Error al exportar: ' + e.message); }}
 }};
-const qrPrintData = `Departamento Técnico
-Ingeniero L\u00f3pez 236. Torre 2. Piso 6-A
-C\u00f3rdoba. Argentina. C.P 5000.
-Natura ARGENTINA
-www.naturainternational.org`;
-new QRCode(document.getElementById("qrPrint"), {{ text: qrPrintData, width: 60, height: 60 }});
 </script>
 
 </body>
@@ -743,7 +719,7 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
             "fillColor": fill_color,
             "color": edge_color,
             "weight": 2,
-            "fillOpacity": 0.35,
+            "fillOpacity": 0.6,
         }
         tooltip = None
         if include_labels:
