@@ -98,25 +98,9 @@ def _build_interactive_template(
         elif geom_type == "point":
             legend_items += f'''
             <li><div class="circle-marker" style="background:{fill_color}; border-color:{edge_color};"></div> <span>{layer_name}</span></li>'''
-        g = gdf.copy()
-        if g.crs is None:
-            g = g.set_crs("EPSG:4326")
-        if not g.empty:
-            g = g.to_crs("EPSG:3857")
-            area_m2 = g.area.sum()
-            total_area_ha += area_m2 / 10000
-            total_area_km2 += area_m2 / 1_000_000
 
-    if total_area_ha >= 100:
-        area_ha_str = f"{total_area_ha:,.0f}"
-        area_km2_str = f"{total_area_km2:,.0f}"
-    else:
-        area_ha_str = f"{total_area_ha:,.2f}"
-        area_km2_str = f"{total_area_km2:,.2f}"
-
-    # Calculate centroid and bounds for info card
-    center_lat = ""
-    center_lng = ""
+    area_ha_str, area_km2_str = "", ""
+    center_lat, center_lng = "", ""
     try:
         all_gdfs = []
         for gdf, _name, _fc, _ec in layers:
@@ -125,14 +109,26 @@ def _build_interactive_template(
             g = gdf.copy()
             if g.crs is None:
                 g = g.set_crs("EPSG:4326")
+            if not g.empty:
+                g3857 = g.to_crs("EPSG:3857")
+                area_m2 = g3857.area.sum()
+                total_area_ha += area_m2 / 10000
+                total_area_km2 += area_m2 / 1_000_000
             all_gdfs.append(g.to_crs("EPSG:4326"))
         if all_gdfs:
             merged = gpd.pd.concat(all_gdfs, ignore_index=True)
             bounds = merged.total_bounds
-            center_lat = f"{(bounds[1] + bounds[3]) / 2:.2f}"
-            center_lng = f"{(bounds[0] + bounds[2]) / 2:.2f}"
+            center_lat = f"{(bounds[1] + bounds[3]) / 2:.4f}"
+            center_lng = f"{(bounds[0] + bounds[2]) / 2:.4f}"
     except Exception:
         pass
+
+    if total_area_ha >= 100:
+        area_ha_str = f"{total_area_ha:,.0f}"
+        area_km2_str = f"{total_area_km2:,.0f}"
+    else:
+        area_ha_str = f"{total_area_ha:,.2f}"
+        area_km2_str = f"{total_area_km2:,.2f}"
 
     logo_html = ""
     if logo_path and os.path.exists(logo_path):
@@ -146,18 +142,18 @@ def _build_interactive_template(
 
     title_display = map_name or "Mapa"
     project_display = project_name or ""
-    today_str = datetime.now().strftime("%B %Y")
+    today_str = datetime.now().strftime("%d/%m/%Y")
 
     area_info = ""
-    if has_polygon:
-        area_info = f'<p><span class="info-label">📐 Superficie:</span><span class="info-value">{area_ha_str} hectáreas ({area_km2_str} km²)</span></p>'
+    if has_polygon and area_ha_str:
+        area_info = f'<p><span class="info-label">Superficie:</span><span class="info-value">{area_ha_str} ha ({area_km2_str} km²)</span></p>'
 
     location_info = ""
     if center_lat and center_lng:
-        location_info = f'<p><span class="info-label">📌 Coordenadas:</span><span class="info-value">Lat {center_lat} / Lon {center_lng} (centroide)</span></p>'
+        location_info = f'<p><span class="info-label">Coordenadas:</span><span class="info-value">Lat {center_lat} / Lon {center_lng}</span></p>'
 
     header_title_text = title_display
-    if has_polygon:
+    if has_polygon and area_ha_str:
         header_title_text += f" · {area_ha_str} ha"
     if project_display:
         header_title_text += f" · {project_display}"
@@ -176,147 +172,364 @@ def _build_interactive_template(
             border-bottom: 3px solid #b7b87b;
             min-height: 48px;
         }}
-        .brand {{
-            display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
-        }}
-        .header-logo {{
-            height: 28px; width: auto; object-fit: contain; margin-right: 2px;
-        }}
-        .brand .logo {{
-            font-weight: 800; font-size: 1.1rem; letter-spacing: -0.3px;
-            background: #e6b42220; padding: 0.15rem 0.5rem; border-radius: 40px;
-            border-left: 3px solid #e9c46a;
-        }}
+        .brand {{ display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }}
+        .header-logo {{ height: 28px; width: auto; object-fit: contain; margin-right: 2px; }}
+        .brand .logo {{ font-weight: 800; font-size: 1.1rem; letter-spacing: -0.3px; background: #e6b42220; padding: 0.15rem 0.5rem; border-radius: 40px; border-left: 3px solid #e9c46a; }}
         .brand .logo a {{ color: #f5e7b2; text-decoration: none; }}
-        .institution-name {{
-            font-weight: 500; font-size: 0.75rem;
-            background: #2a4b37; padding: 0.15rem 0.6rem; border-radius: 30px;
-        }}
-        .map-title-header {{
-            background: #00000033; backdrop-filter: blur(4px);
-            padding: 0.2rem 0.8rem; border-radius: 40px;
-            font-weight: 600; font-size: 0.8rem; letter-spacing: 0.3px;
-            border: 1px solid #cee2b0; text-align: center;
-        }}
-        .departamento-tech {{
-            font-size: 0.6rem; background: #2c5a3b; padding: 0.15rem 0.7rem;
-            border-radius: 20px; display: inline-flex; align-items: center; gap: 4px;
-        }}
+        .institution-name {{ font-weight: 500; font-size: 0.75rem; background: #2a4b37; padding: 0.15rem 0.6rem; border-radius: 30px; }}
+        .map-title-header {{ background: #00000033; backdrop-filter: blur(4px); padding: 0.2rem 0.8rem; border-radius: 40px; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.3px; border: 1px solid #cee2b0; text-align: center; }}
+        .departamento-tech {{ font-size: 0.6rem; background: #2c5a3b; padding: 0.15rem 0.7rem; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; }}
         .map-wrapper {{ flex: 1; position: relative; background: #cbdcd0; }}
         #map {{ height: 100%; width: 100%; z-index: 1; }}
         .folium-map {{ margin-top: 52px !important; margin-bottom: 24px !important; }}
-
-        .info-card {{
-            position: absolute; bottom: 20px; right: 20px; width: 280px;
-            max-width: calc(100% - 40px);
-            background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px);
-            border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            padding: 0.9rem 1.1rem; border-left: 5px solid #4c9f70;
-            z-index: 10; font-size: 0.78rem; pointer-events: auto;
-        }}
-        .info-card h3 {{
-            font-size: 1rem; font-weight: 700; margin: 0 0 0.4rem 0;
-            color: #1e3b2a; border-bottom: 2px solid #e0e7cf;
-            display: inline-block; padding-right: 1rem;
-        }}
+        .info-card {{ position: absolute; bottom: 20px; right: 20px; width: 280px; max-width: calc(100% - 40px); background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding: 0.9rem 1.1rem; border-left: 5px solid #4c9f70; z-index: 10; font-size: 0.78rem; pointer-events: auto; }}
+        .info-card h3 {{ font-size: 1rem; font-weight: 700; margin: 0 0 0.4rem 0; color: #1e3b2a; border-bottom: 2px solid #e0e7cf; display: inline-block; padding-right: 1rem; }}
         .info-card p {{ margin: 0.4rem 0; line-height: 1.4; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }}
         .info-label {{ font-weight: 700; color: #2c6e3c; min-width: 65px; font-size: 0.7rem; }}
         .info-value {{ font-weight: 500; color: #1c2c1a; }}
-        .info-footer {{
-            margin-top: 8px; font-size: 0.65rem; color: #4f6b4a;
-            border-top: 1px solid #ddd9c5; padding-top: 6px; text-align: center;
-        }}
-
-        .legend-card {{
-            position: absolute; bottom: 20px; left: 20px; width: 240px;
-            max-width: calc(100% - 60px);
-            background: rgba(255, 255, 248, 0.97); backdrop-filter: blur(8px);
-            border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-            padding: 0.8rem 0.9rem; border-right: 3px solid #8bb56a;
-            z-index: 10; font-size: 0.75rem; pointer-events: auto;
-            max-height: 50vh; overflow-y: auto;
-        }}
-        .legend-card h4 {{
-            font-size: 0.85rem; font-weight: 700; margin: 0 0 6px 0;
-            color: #2d4a26; display: flex; align-items: center; gap: 6px;
-            border-bottom: 1px solid #ccdbb8; padding-bottom: 4px;
-        }}
+        .info-footer {{ margin-top: 8px; font-size: 0.65rem; color: #4f6b4a; border-top: 1px solid #ddd9c5; padding-top: 6px; text-align: center; }}
+        .legend-card {{ position: absolute; bottom: 20px; left: 20px; width: 240px; max-width: calc(100% - 60px); background: rgba(255, 255, 248, 0.97); backdrop-filter: blur(8px); border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); padding: 0.8rem 0.9rem; border-right: 3px solid #8bb56a; z-index: 10; font-size: 0.75rem; pointer-events: auto; max-height: 50vh; overflow-y: auto; }}
+        .legend-card h4 {{ font-size: 0.85rem; font-weight: 700; margin: 0 0 6px 0; color: #2d4a26; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #ccdbb8; padding-bottom: 4px; }}
         .legend-list {{ list-style: none; margin: 0; padding: 0; }}
-        .legend-list li {{
-            display: flex; align-items: center; gap: 8px;
-            margin-bottom: 6px; font-size: 0.7rem; line-height: 1.3;
-        }}
+        .legend-list li {{ display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.7rem; line-height: 1.3; }}
         .legend-color {{ width: 24px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }}
         .legend-line {{ width: 24px; height: 3px; display: inline-block; border-radius: 2px; flex-shrink: 0; }}
-        .legend-dash {{ width: 24px; height: 0; border-top: 2px dashed; display: inline-block; flex-shrink: 0; }}
         .circle-marker {{ width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid; display: inline-block; flex-shrink: 0; }}
-        .legend-footer-small {{
-            font-size: 0.6rem; margin-top: 8px; text-align: center;
-            color: #5b6e53; border-top: 1px solid #e0e2d4; padding-top: 5px;
-        }}
-
-        .footer-credits {{
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;
-            background: #eaf2e5; font-size: 0.6rem; text-align: center;
-            padding: 4px; color: #2b482f; border-top: 1px solid #c7dcb4;
-            font-family: monospace; min-height: 22px;
-        }}
-        .leaflet-control-layers {{
-            margin-top: 56px !important; margin-left: 8px !important;
-            border-radius: 16px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
-        }}
-        .leaflet-control-scale {{
-            background: rgba(255,255,245,0.9) !important;
-            border-radius: 12px !important; padding: 2px 8px !important;
-            font-size: 10px !important; font-weight: 500 !important;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important;
-        }}
-        @media (max-width: 700px) {{
-            .top-header {{ padding: 0.4rem 0.8rem; flex-direction: column; align-items: flex-start; min-height: 40px; }}
-            .info-card, .legend-card {{ position: relative !important; bottom: auto; left: auto; right: auto; margin: 8px; width: auto; max-width: none; }}
-            .folium-map {{ margin-top: 88px !important; }}
-            .leaflet-control-layers {{ margin-top: 90px !important; }}
-        }}
+        .legend-footer-small {{ font-size: 0.6rem; margin-top: 8px; text-align: center; color: #5b6e53; border-top: 1px solid #e0e2d4; padding-top: 5px; }}
+        .footer-credits {{ position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000; background: #eaf2e5; font-size: 0.6rem; text-align: center; padding: 4px; color: #2b482f; border-top: 1px solid #c7dcb4; font-family: monospace; min-height: 22px; }}
+        .leaflet-control-layers {{ margin-top: 56px !important; margin-left: 8px !important; border-radius: 16px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important; }}
+        .leaflet-control-scale {{ background: rgba(255,255,245,0.9) !important; border-radius: 12px !important; padding: 2px 8px !important; font-size: 10px !important; font-weight: 500 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important; }}
+        @media (max-width: 700px) {{ .top-header {{ padding: 0.4rem 0.8rem; flex-direction: column; align-items: flex-start; min-height: 40px; }} .info-card, .legend-card {{ position: relative !important; bottom: auto; left: auto; right: auto; margin: 8px; width: auto; max-width: none; }} .folium-map {{ margin-top: 88px !important; }} .leaflet-control-layers {{ margin-top: 90px !important; }} }}
     </style>
     <header class="top-header">
         <div class="brand">
             {logo_html}
-            <div class="logo">🌿 <a href="https://{NATURA_WEB}" target="_blank">NaturaArgentina</a></div>
+            <div class="logo"><a href="https://{NATURA_WEB}" target="_blank">NaturaArgentina</a></div>
             <div class="institution-name">Conservación · Investigación · Territorios</div>
         </div>
         <div class="map-title-header" id="dynamicMapTitle">
-            📍 {header_title_text}
+            {header_title_text}
         </div>
         <div class="departamento-tech">
-            🏢 Dpto. Técnico | {NATURA_ADDRESS}
+            Dpto. Técnico | {NATURA_ADDRESS}
         </div>
     </header>
     <div class="legend-card">
-        <h4>📖 Referencias cartográficas</h4>
+        <h4>Referencias cartográficas</h4>
         <ul class="legend-list">
             {legend_items}
         </ul>
         <div class="legend-footer-small">
-            ⚙️ Escala gráfica: 0 — 10 — 20 km (control inferior izquierdo)<br>
+            Escala gráfica: ver control inferior izquierdo<br>
             Base: OpenStreetMap · Capas temáticas ajustables
         </div>
     </div>
     <div class="info-card" id="infoCard">
-        <h3>📋 Información del área</h3>
-        <p><span class="info-label">📍 Ubicación:</span><span class="info-value">{project_display if project_display else "Área de interés"}</span></p>
+        <h3>Información del área</h3>
+        <p><span class="info-label">Ubicación:</span><span class="info-value">{project_display if project_display else "Área de interés"}</span></p>
         {area_info}
-        <p><span class="info-label">🗺️ Referencia:</span><span class="info-value">{title_display}</span></p>
-        <p><span class="info-label">📅 Fecha base:</span><span class="info-value">{today_str}</span></p>
+        <p><span class="info-label">Referencia:</span><span class="info-value">{title_display}</span></p>
+        <p><span class="info-label">Fecha:</span><span class="info-value">{today_str}</span></p>
         {location_info}
         <div class="info-footer">
-            🌱 Datos técnicos de campo · Relevamiento Natura Argentina
+            Datos técnicos de campo · Relevamiento Natura Argentina
         </div>
     </div>
     <div class="footer-credits">
-        🌎 www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
+        www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
     </div>
     '''
     return template
+
+
+def _build_print_template(fig_map_html, layers, project_name, map_name, logo_path=None):
+    """Build a self-contained print-layout HTML with left panel + map + layer toggles + export."""
+    total_area_ha = 0.0
+    total_area_km2 = 0.0
+    center_lat = ""
+    center_lng = ""
+    legend_items_html = ""
+
+    for i, (gdf, layer_name, fill_color, edge_color) in enumerate(layers):
+        if gdf.empty:
+            layer_id = f"layer_{i}"
+            legend_items_html += f'''
+            <label class="legend-item" data-layer="{layer_id}">
+                <span class="legend-swatch" style="background:{fill_color};border:1px solid {edge_color};width:16px;height:10px;display:inline-block;border-radius:2px;"></span>
+                <span>{layer_name}</span>
+            </label>'''
+            continue
+        geom_type = _get_geom_type(gdf)
+        layer_id = f"layer_{i}"
+        if geom_type == "polygon":
+            swatch = f'<span class="legend-swatch" style="background:{fill_color};border:1px solid {edge_color};width:26px;height:14px;display:inline-block;border-radius:3px;"></span>'
+        elif geom_type == "line":
+            swatch = f'<span class="legend-swatch" style="background:{edge_color};width:26px;height:3px;display:inline-block;border-radius:2px;vertical-align:middle;"></span>'
+        else:
+            swatch = f'<span class="legend-swatch" style="background:{fill_color};border:1.5px solid {edge_color};width:12px;height:12px;display:inline-block;border-radius:50%;"></span>'
+
+        legend_items_html += f'''
+        <label class="legend-item" data-layer="{layer_id}">
+            <input type="checkbox" checked onchange="toggleLayer('{layer_id}', this.checked)">
+            {swatch}
+            <span>{layer_name}</span>
+        </label>'''
+
+        g = gdf.copy()
+        if g.crs is None:
+            g = g.set_crs("EPSG:4326")
+        if not g.empty:
+            g3857 = g.to_crs("EPSG:3857")
+            area_m2 = g3857.area.sum()
+            total_area_ha += area_m2 / 10000
+            total_area_km2 += area_m2 / 1_000_000
+
+    if total_area_ha >= 100:
+        area_ha_str = f"{total_area_ha:,.0f}"
+        area_km2_str = f"{total_area_km2:,.0f}"
+    else:
+        area_ha_str = f"{total_area_ha:,.2f}"
+        area_km2_str = f"{total_area_km2:,.2f}"
+
+    try:
+        all_gdfs = []
+        for gdf, _name, _fc, _ec in layers:
+            if gdf.empty:
+                continue
+            g = gdf.copy()
+            if g.crs is None:
+                g = g.set_crs("EPSG:4326")
+            all_gdfs.append(g.to_crs("EPSG:4326"))
+        if all_gdfs:
+            merged = gpd.pd.concat(all_gdfs, ignore_index=True)
+            bounds = merged.total_bounds
+            center_lat = f"{(bounds[1] + bounds[3]) / 2:.4f}"
+            center_lng = f"{(bounds[0] + bounds[2]) / 2:.4f}"
+    except Exception:
+        pass
+
+    logo_html = ""
+    if logo_path and os.path.exists(logo_path):
+        try:
+            with open(logo_path, "rb") as f:
+                import base64
+                b64 = base64.b64encode(f.read()).decode()
+            logo_html = f'<img src="data:image/png;base64,{b64}" class="panel-logo" alt="Logo">'
+        except Exception:
+            pass
+
+    title_display = map_name or "Mapa"
+    project_display = project_name or ""
+    today_str = datetime.now().strftime("%d/%m/%Y")
+
+    area_info = ""
+    if area_ha_str:
+        area_info = f'<p><span class="il">Superficie:</span><span class="iv">{area_ha_str} ha ({area_km2_str} km²)</span></p>'
+
+    location_info = ""
+    if center_lat and center_lng:
+        location_info = f'<p><span class="il">Coordenadas:</span><span class="iv">Lat {center_lat} / Lon {center_lng}</span></p>'
+
+    # Build list of layer data for JS
+    layers_meta = []
+    for i, (gdf, layer_name, fill_color, edge_color) in enumerate(layers):
+        layers_meta.append({
+            "id": f"layer_{i}",
+            "name": layer_name,
+        })
+
+    L = len(layers)
+    import json
+
+    import json as _json
+    # Escape the folium HTML for embedding in JS template literal
+    folium_json_str = _json.dumps(fig_map_html)
+
+    html = f'''<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Print Layout - {title_display}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
+
+.print-layout {{
+    width: 1200px; height: 900px;
+    margin: 20px auto; display: flex;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: white; position: relative;
+}}
+
+.left-panel {{
+    width: 27%; height: 100%;
+    background: #fafaf8;
+    display: flex; flex-direction: column;
+    padding: 22px 16px 14px 18px;
+    border-right: 1px solid #d4ddd0;
+    overflow: hidden;
+}}
+.panel-logo {{ max-width: 90%; max-height: 55px; object-fit: contain; margin-bottom: 10px; }}
+.panel-title {{ font-size: 21px; font-weight: 800; color: #1f3b2c; margin-bottom: 1px; line-height: 1.2; }}
+.panel-project {{ font-size: 14px; font-weight: 500; color: #4d6b4d; margin-bottom: 3px; }}
+.panel-area {{ font-size: 12px; color: #3c6e3f; margin-bottom: 6px; }}
+.panel-sep {{ border: none; border-top: 1.5px solid #c0d4b0; margin: 7px 0; }}
+
+.legend-title {{ font-size: 15px; font-weight: 700; color: #2d4a26; margin-bottom: 6px; }}
+.legend-item {{
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #1e2a1e; margin-bottom: 3px;
+    cursor: pointer; user-select: none;
+}}
+.legend-item input[type="checkbox"] {{ accent-color: #4c9f70; width: 16px; height: 16px; cursor: pointer; }}
+
+.info-title {{ font-size: 15px; font-weight: 700; color: #2d4a26; margin: 3px 0 3px; }}
+.info-card-print {{ font-size: 11px; }}
+.info-card-print p {{ margin: 2px 0; line-height: 1.3; }}
+.il {{ font-weight: 600; color: #3c6e3f; }}
+.iv {{ color: #1c2c1a; }}
+
+.scale-section {{ margin-top: auto; padding-top: 6px; }}
+.scale-title {{ font-size: 12px; font-weight: 600; color: #3c6e3f; margin-bottom: 3px; }}
+.scale-bar-wrap {{ display: flex; align-items: center; gap: 6px; }}
+.scale-bar-line {{ height: 3px; background: black; width: 140px; position: relative; }}
+.scale-bar-line::before, .scale-bar-line::after {{
+    content: ''; position: absolute; top: -5px;
+    width: 2.5px; height: 12px; background: black;
+}}
+.scale-bar-line::before {{ left: 0; }}
+.scale-bar-line::after {{ right: 0; }}
+.scale-label {{ font-size: 10px; font-weight: 700; color: #333; }}
+
+.credits {{
+    margin-top: 5px; font-size: 7.5px; color: #7a8f7a; line-height: 1.4;
+}}
+
+.map-area {{
+    width: 73%; height: 100%; position: relative;
+    background: #e8ece8; overflow: hidden;
+}}
+.map-area iframe {{ width: 100%; height: 100%; border: none; }}
+
+.export-bar {{
+    max-width: 1200px; margin: 0 auto 20px;
+    padding: 8px 0; display: flex; gap: 8px;
+    justify-content: center; flex-wrap: wrap;
+}}
+.export-btn {{
+    padding: 8px 20px; border: none; border-radius: 6px;
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    cursor: pointer; color: white; transition: opacity 0.2s;
+}}
+.export-btn:hover {{ opacity: 0.85; }}
+.btn-png {{ background: #2d6a2b; }}
+.btn-jpg {{ background: #e87c1f; }}
+.btn-pdf {{ background: #c22d2d; }}
+.btn-html {{ background: #1f3b2c; }}
+
+@media print {{
+    .export-bar {{ display: none !important; }}
+    .print-layout {{ margin: 0; box-shadow: none; width: 100%; height: 100vh; }}
+}}
+</style>
+</head>
+<body>
+
+<div class="export-bar" id="exportBar">
+    <button class="export-btn btn-png" onclick="exportFormat('png')">PNG</button>
+    <button class="export-btn btn-jpg" onclick="exportFormat('jpeg')">JPEG</button>
+    <button class="export-btn btn-pdf" onclick="exportFormat('pdf')">PDF</button>
+    <button class="export-btn btn-html" onclick="window.print()">Imprimir</button>
+</div>
+
+<div class="print-layout" id="printLayout">
+    <div class="left-panel">
+        {logo_html}
+        <div class="panel-title">{title_display}</div>
+        {f'<div class="panel-project">{project_display}</div>' if project_display else ''}
+        {f'<div class="panel-area">Superficie: {area_ha_str} ha</div>' if area_ha_str else ''}
+        <hr class="panel-sep">
+
+        <div class="legend-title">Referencias</div>
+        <div id="legendContainer">
+        {legend_items_html}
+        </div>
+        <hr class="panel-sep">
+
+        <div class="info-title">Información del área</div>
+        <div class="info-card-print">
+            <p><span class="il">Ubicación:</span><span class="iv">{project_display or "Área de interés"}</span></p>
+            {area_info}
+            <p><span class="il">Referencia:</span><span class="iv">{title_display}</span></p>
+            <p><span class="il">Fecha:</span><span class="iv">{today_str}</span></p>
+            {location_info}
+        </div>
+        <hr class="panel-sep">
+
+        <div class="scale-section">
+            <div class="scale-title">Escala gráfica</div>
+            <div class="scale-bar-wrap">
+                <div class="scale-bar-line"></div>
+                <span class="scale-label">10 km</span>
+            </div>
+        </div>
+        <div class="credits">
+            &copy; Natura Argentina<br>
+            www.{NATURA_WEB}<br>
+            {NATURA_ADDRESS}
+        </div>
+    </div>
+
+    <div class="map-area" id="mapArea">
+        <iframe id="mapIframe" sandbox="allow-scripts allow-same-origin allow-popups" style="width:100%;height:100%;border:none;"></iframe>
+    </div>
+</div>
+
+<script>
+var foliumHtml = {folium_json_str};
+document.getElementById('mapIframe').srcdoc = foliumHtml;
+
+function toggleLayer(layerId, visible) {{
+    var iframe = document.getElementById('mapIframe');
+    if (iframe && iframe.contentWindow) {{
+        iframe.contentWindow.postMessage({{type:'toggleLayer', layerId:layerId, visible:visible}}, '*');
+    }}
+}}
+
+async function exportFormat(format) {{
+    var layout = document.getElementById('printLayout');
+    if (!layout) return;
+    try {{
+        var canvas = await html2canvas(layout, {{
+            scale: 2, useCORS: true, allowTaint: false,
+            backgroundColor: '#ffffff', logging: false,
+            width: layout.scrollWidth, height: layout.scrollHeight,
+        }});
+        if (format === 'pdf') {{
+            var imgData = canvas.toDataURL('image/png');
+            var pdf = new jspdf.jsPDF('landscape', 'px', [canvas.width, canvas.height]);
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('{title_display}.pdf');
+        }} else {{
+            var mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+            var ext = format === 'jpeg' ? 'jpg' : 'png';
+            var link = document.createElement('a');
+            link.download = '{title_display}.' + ext;
+            link.href = canvas.toDataURL(mime, format === 'jpeg' ? 0.95 : undefined);
+            link.click();
+        }}
+    }} catch(e) {{ alert('Error al exportar: ' + e.message); }}
+}}
+</script>
+
+</body>
+</html>'''
+
+    return html
 
 
 LAYER_COLORS = [
@@ -450,7 +663,7 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
         attr=attr,
     )
 
-    for gdf, layer_name, fill_color, edge_color in layers:
+    for i, (gdf, layer_name, fill_color, edge_color) in enumerate(layers):
         if gdf.crs.to_string() != "EPSG:4326":
             gdf = gdf.to_crs("EPSG:4326")
         style = {
@@ -464,18 +677,48 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
             label_col = _detect_label_column(gdf)
             if label_col is not None:
                 tooltip = folium.GeoJsonTooltip(fields=[label_col], labels=False, sticky=True)
+        fg = folium.FeatureGroup(name=f"layer_{i}", show=True)
         geo_json = folium.GeoJson(
             gdf.to_json(),
             style_function=lambda x, s=style: s,
             name=layer_name,
             tooltip=tooltip,
         )
-        geo_json.add_to(m)
+        geo_json.add_to(fg)
+        fg.add_to(m)
 
     custom_template = _build_interactive_template(
         layers, project_name, map_name, logo_path=logo_path,
     )
     m.get_root().html.add_child(folium.Element(custom_template))
+
+    # Inject toggle-layer listener for print template
+    toggle_js = """
+<script>
+window.__toggleLayer = function(layerId, visible) {
+    try {
+        var m = null;
+        for (var k in window) {
+            if (k.indexOf('map_') === 0 && window[k] && window[k].eachLayer) {
+                m = window[k]; break;
+            }
+        }
+        if (!m) return;
+        m.eachLayer(function(layer) {
+            if (layer.options && layer.options.name === layerId) {
+                if (visible) m.addLayer(layer);
+                else m.removeLayer(layer);
+            }
+        });
+    } catch(e) { console.warn('toggle:', e); }
+};
+window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'toggleLayer') {
+        window.__toggleLayer(e.data.layerId, e.data.visible);
+    }
+});
+</script>"""
+    m.get_root().html.add_child(folium.Element(toggle_js))
 
     plugins.Fullscreen(position="topright").add_to(m)
     plugins.MousePosition(position="bottomright").add_to(m)
@@ -484,6 +727,17 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
     m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
     return m
+
+
+def generate_print_template(layers, basemap_name, project_name, map_name, include_labels=False, logo_path=None):
+    """Generate a self-contained print layout HTML with map, legend toggles, and export buttons."""
+    folium_map = create_interactive_map(layers, basemap_name, project_name, map_name,
+                                        include_labels=include_labels, logo_path=logo_path)
+    if folium_map is None:
+        return None
+    folium_html = folium_map.get_root().render()
+    print_html = _build_print_template(folium_html, layers, project_name, map_name, logo_path=logo_path)
+    return print_html
 
 
 def _deg_to_3857(x, y):
@@ -633,7 +887,7 @@ def add_north_arrow_map(ax, gdf_m):
 
 
 def _draw_left_panel(fig, logo_img, map_name, project_name, layers, total_area_ha, total_area_km2, center_lat, center_lng):
-    from matplotlib.patches import Rectangle, Circle
+    from matplotlib.patches import Rectangle, Circle, FancyBboxPatch
     PANEL_W = 0.27
     ax = fig.add_axes([0, 0, PANEL_W, 1], zorder=5)
     ax.set_facecolor('#fafaf8')
@@ -644,60 +898,60 @@ def _draw_left_panel(fig, logo_img, map_name, project_name, layers, total_area_h
     # ---- LOGO ----
     if logo_img:
         logo_aspect = logo_img.width / logo_img.height
-        logo_h_fig = 0.05
+        logo_h_fig = 0.07
         logo_w_fig = logo_h_fig * logo_aspect * (fig.get_size_inches()[1] / fig.get_size_inches()[0])
         ax_logo = fig.add_axes([0.03, y - logo_h_fig, logo_w_fig, logo_h_fig], zorder=6)
         ax_logo.imshow(logo_img)
         ax_logo.axis('off')
-        y -= logo_h_fig + 0.015
+        y -= logo_h_fig + 0.025
 
     # ---- TITLE SECTION ----
-    title_text = map_name or "Mapa"
-    ax.text(0.06, y, title_text, fontsize=13, fontweight='800', color='#1f3b2c', va='top')
-    y -= 0.04
+    ax.text(0.06, y, (map_name or "Mapa"), fontsize=22, fontweight='800', color='#1f3b2c', va='top')
+    y -= 0.065
 
     if project_name:
-        ax.text(0.06, y, project_name, fontsize=8.5, fontweight='500', color='#5a7a5a', va='top')
-        y -= 0.035
+        ax.text(0.06, y, project_name, fontsize=14, fontweight='500', color='#4d6b4d', va='top')
+        y -= 0.045
 
     if total_area_ha > 0:
         area_h = f"{total_area_ha:,.0f}" if total_area_ha >= 100 else f"{total_area_ha:,.2f}"
-        ax.text(0.06, y, f"Superficie: {area_h} ha", fontsize=7.5, color='#3c6e3f', va='top')
-        y -= 0.028
+        ax.text(0.06, y, f"Superficie: {area_h} ha", fontsize=11, color='#3c6e3f', va='top')
+        y -= 0.035
 
     y -= 0.015
-    ax.plot([0.06, 0.93], [y, y], color='#ccdcc0', linewidth=0.7, transform=ax.transAxes, clip_on=False)
-    y -= 0.035
+    ax.plot([0.06, 0.93], [y, y], color='#c0d4b0', linewidth=1.5, transform=ax.transAxes, clip_on=False)
+    y -= 0.04
 
     # ---- LEGEND SECTION ----
-    ax.text(0.06, y, 'Referencias', fontsize=9, fontweight='700', color='#2d4a26', va='top')
-    y -= 0.035
+    ax.text(0.06, y, 'Referencias', fontsize=16, fontweight='700', color='#2d4a26', va='top')
+    y -= 0.045
 
     for gdf, layer_name, fill_color, edge_color in layers:
         if gdf.empty:
             continue
         geom_type = _get_geom_type(gdf)
+        sy = y - 0.02
         if geom_type == 'polygon':
-            r = Rectangle((0.06, y - 0.015), 0.04, 0.022, facecolor=fill_color, edgecolor=edge_color,
-                          linewidth=0.5, transform=ax.transAxes, zorder=7)
+            r = Rectangle((0.06, sy), 0.06, 0.035, facecolor=fill_color, edgecolor=edge_color,
+                          linewidth=1, transform=ax.transAxes, zorder=7)
             ax.add_patch(r)
         elif geom_type == 'line':
-            ax.plot([0.06, 0.1], [y - 0.006, y - 0.006], color=edge_color, linewidth=2,
+            ax.plot([0.06, 0.12], [y, y], color=edge_color, linewidth=4,
                     transform=ax.transAxes, zorder=7, clip_on=False)
         elif geom_type == 'point':
-            c = Circle((0.08, y - 0.006), 0.01, facecolor=fill_color, edgecolor=edge_color,
-                       linewidth=0.7, transform=ax.transAxes, zorder=7)
+            c = Circle((0.09, y), 0.018, facecolor=fill_color, edgecolor=edge_color,
+                       linewidth=1, transform=ax.transAxes, zorder=7)
             ax.add_patch(c)
-        ax.text(0.114, y, layer_name, fontsize=6.5, color='#1e2a1e', va='center')
-        y -= 0.028
+        ax.text(0.13, y, layer_name, fontsize=12, color='#1e2a1e', va='center')
+        y -= 0.042
 
     y -= 0.01
-    ax.plot([0.06, 0.93], [y, y], color='#ccdcc0', linewidth=0.7, transform=ax.transAxes, clip_on=False)
-    y -= 0.03
+    ax.plot([0.06, 0.93], [y, y], color='#c0d4b0', linewidth=1.5, transform=ax.transAxes, clip_on=False)
+    y -= 0.035
 
     # ---- INFO SECTION ----
-    ax.text(0.06, y, 'Información del área', fontsize=9, fontweight='700', color='#2d4a26', va='top')
-    y -= 0.035
+    ax.text(0.06, y, 'Información del área', fontsize=16, fontweight='700', color='#2d4a26', va='top')
+    y -= 0.045
 
     info_lines = []
     info_lines.append(('Ubicación:', project_name or 'Área de interés'))
@@ -711,29 +965,30 @@ def _draw_left_panel(fig, logo_img, map_name, project_name, layers, total_area_h
         info_lines.append(('Coordenadas:', f"Lat {center_lat} / Lon {center_lng}"))
 
     for label, value in info_lines:
-        ax.text(0.06, y, label, fontsize=6.5, fontweight='600', color='#3c6e3f', va='top')
-        ax.text(0.06, y - 0.016, str(value), fontsize=6, color='#1c2c1a', va='top')
-        y -= 0.036
+        ax.text(0.06, y, label, fontsize=10, fontweight='600', color='#3c6e3f', va='top')
+        ax.text(0.06, y - 0.024, str(value), fontsize=10, color='#1c2c1a', va='top')
+        y -= 0.048
 
     y -= 0.01
-    ax.plot([0.06, 0.93], [y, y], color='#ccdcc0', linewidth=0.7, transform=ax.transAxes, clip_on=False)
-    y -= 0.03
+    ax.plot([0.06, 0.93], [y, y], color='#c0d4b0', linewidth=1.5, transform=ax.transAxes, clip_on=False)
+    y -= 0.035
 
-    # ---- SCALE BAR + NORTH ----
-    ax.text(0.06, y, 'Escala gráfica', fontsize=7, fontweight='600', color='#3c6e3f', va='top')
-    y -= 0.025
-    bar_len = 0.16
+    # ---- SCALE BAR ----
+    ax.text(0.06, y, 'Escala gráfica', fontsize=12, fontweight='600', color='#3c6e3f', va='top')
+    y -= 0.03
+    bar_len = 0.2
     bar_x = 0.12
-    ax.plot([bar_x, bar_x + bar_len], [y, y], color='black', linewidth=2, transform=ax.transAxes, clip_on=False)
-    ax.plot([bar_x, bar_x], [y - 0.006, y + 0.006], color='black', linewidth=1.2, transform=ax.transAxes, clip_on=False)
-    ax.plot([bar_x + bar_len, bar_x + bar_len], [y - 0.006, y + 0.006], color='black', linewidth=1.2, transform=ax.transAxes, clip_on=False)
-    ax.text(bar_x + bar_len / 2, y - 0.02, '10 km', fontsize=5.5, ha='center', va='top', color='#333')
-    y -= 0.04
+    ax.plot([bar_x, bar_x + bar_len], [y, y], color='black', linewidth=4, transform=ax.transAxes, clip_on=False)
+    ax.plot([bar_x, bar_x], [y - 0.015, y + 0.015], color='black', linewidth=2.5, transform=ax.transAxes, clip_on=False)
+    ax.plot([bar_x + bar_len, bar_x + bar_len], [y - 0.015, y + 0.015], color='black', linewidth=2.5, transform=ax.transAxes, clip_on=False)
+    scale_label = '10 km'
+    ax.text(bar_x + bar_len / 2, y - 0.035, scale_label, fontsize=10, ha='center', va='top', color='#333', fontweight='bold')
+    y -= 0.055
 
     # ---- CREDITS ----
-    ax.text(0.06, 0.018,
+    ax.text(0.06, 0.02,
             f"© Natura Argentina\nwww.{NATURA_WEB}\n{NATURA_ADDRESS}",
-            fontsize=5, color='#7a8f7a', va='bottom', linespacing=1.3)
+            fontsize=8, color='#7a8f7a', va='bottom', linespacing=1.5)
 
 
 def _detect_label_column(gdf):
@@ -1077,7 +1332,7 @@ def main():
                     st.error(f"Error al generar mapa estático: {str(e)}")
 
         with st.expander("Exportar mapa interactivo (HTML)"):
-            if st.button("Generar HTML"):
+            if st.button("Generar HTML", key="gen_html"):
                 html_layers = []
                 for gdf, layer_name, fc, ec in layers:
                     if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
@@ -1114,6 +1369,48 @@ def main():
                     file_name=f"{map_name.replace(' ', '_')}.html",
                     mime="text/html",
                 )
+
+            st.markdown("---")
+            st.subheader("Plantilla de impresión")
+            if st.button("Generar plantilla de impresión", key="gen_print"):
+                html_layers = []
+                for gdf, layer_name, fc, ec in layers:
+                    if gdf.crs is None or gdf.crs.to_string() != "EPSG:4326":
+                        gdf_html = gdf.to_crs("EPSG:4326")
+                    else:
+                        gdf_html = gdf
+                    html_layers.append((gdf_html, layer_name, fc, ec))
+                export_logo_path = None
+                if uploaded_logo:
+                    logo_ext = uploaded_logo.name.split(".")[-1]
+                    tmp_logo = tempfile.NamedTemporaryFile(suffix=f".{logo_ext}", delete=False)
+                    tmp_logo.write(uploaded_logo.getvalue())
+                    tmp_logo.close()
+                    export_logo_path = tmp_logo.name
+                elif os.path.exists(LOGO_DEFAULT):
+                    export_logo_path = LOGO_DEFAULT
+                try:
+                    print_html = generate_print_template(
+                        html_layers, basemap_name, project_name, map_name,
+                        include_labels=include_labels, logo_path=export_logo_path,
+                    )
+                    if print_html:
+                        st.download_button(
+                            label="Descargar plantilla de impresión (HTML)",
+                            data=print_html.encode("utf-8"),
+                            file_name=f"{map_name.replace(' ', '_')}_print.html",
+                            mime="text/html",
+                            use_container_width=True,
+                        )
+                        st.info("Abrí el HTML en tu navegador para usar los controles de capas y exportar a PNG/JPEG/PDF.")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                finally:
+                    if export_logo_path and export_logo_path != LOGO_DEFAULT:
+                        try:
+                            os.unlink(export_logo_path)
+                        except Exception:
+                            pass
 
 
 if __name__ == "__main__":
