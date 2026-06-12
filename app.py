@@ -518,15 +518,41 @@ function switchBasemap(name) {{
     }}
 }}
 
+async function captureLayout() {{
+    var layout = document.getElementById('printLayout');
+    var iframe = document.getElementById('mapIframe');
+    if (!layout || !iframe) return null;
+    try {{
+        var sc = 2;
+        var layoutCanvas = await html2canvas(layout, {{
+            scale: sc, useCORS: true, allowTaint: false,
+            backgroundColor: '#ffffff', logging: false,
+            width: layout.scrollWidth, height: layout.scrollHeight,
+        }});
+        var ctx = layoutCanvas.getContext('2d');
+        try {{
+            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var mapCanvas = await html2canvas(iframeDoc.body, {{
+                scale: sc, useCORS: true, allowTaint: false,
+                backgroundColor: '#e8ece8',
+                width: iframeDoc.body.scrollWidth,
+                height: iframeDoc.body.scrollHeight,
+            }});
+            var lr = layout.getBoundingClientRect();
+            var ir = iframe.getBoundingClientRect();
+            ctx.drawImage(mapCanvas, (ir.left - lr.left) * sc, (ir.top - lr.top) * sc, ir.width * sc, ir.height * sc);
+        }} catch(e2) {{
+            console.warn('iframe capture failed:', e2);
+        }}
+        return layoutCanvas;
+    }} catch(e) {{ throw e; }}
+}}
 async function exportFormat(format) {{
     var layout = document.getElementById('printLayout');
     if (!layout) return;
     try {{
-        var canvas = await html2canvas(layout, {{
-            scale: 2, useCORS: true, allowTaint: false,
-            backgroundColor: '#ffffff', logging: false,
-            width: layout.scrollWidth, height: layout.scrollHeight,
-        }});
+        var canvas = await captureLayout();
+        if (!canvas) return;
         var fn = '{title_display}';
         if (format === 'pdf') {{
             var imgData = canvas.toDataURL('image/png');
