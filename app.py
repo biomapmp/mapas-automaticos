@@ -311,6 +311,9 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
     folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
     basemap_variants_escaped = basemap_variants or {basemap_name: fig_map_html}
+    _capture_script = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script>window.addEventListener("message",async function(e){if(e.data==="captureMap"){try{var d=document.querySelector("[id^=\\"map_\\"]");var c=await html2canvas(d,{scale:2,useCORS:true,allowTaint:false,backgroundColor:"#e8ece8"});e.source.postMessage({type:"mapCapture",dataUrl:c.toDataURL("image/png")},"*")}catch(err){e.source.postMessage({type:"mapCaptureError",message:err.message},"*")}}});</script>'
+    for k in list(basemap_variants_escaped.keys()):
+        basemap_variants_escaped[k] = basemap_variants_escaped[k].replace('</body>', _capture_script + '</body>')
     basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False).replace('</script>', '<\\/script>')
 
     html = f'''<!DOCTYPE html>
@@ -527,17 +530,23 @@ async function captureLayout() {{
         }});
         var ctx = layoutCanvas.getContext('2d');
         try {{
-            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-            var mapContainer = iframeDoc.querySelector('[id^="map_"]') || iframeDoc.body;
-            var mapCanvas = await html2canvas(mapContainer, {{
-                scale: sc, useCORS: true, allowTaint: false,
-                backgroundColor: '#e8ece8',
+            var mapDataUrl = await new Promise(function(resolve, reject) {{
+                var t = setTimeout(function() {{ reject(new Error('timeout')); }}, 20000);
+                var handler = function(e) {{
+                    if (e.data && e.data.type === 'mapCapture') {{ clearTimeout(t); window.removeEventListener('message', handler); resolve(e.data.dataUrl); }}
+                    if (e.data && e.data.type === 'mapCaptureError') {{ clearTimeout(t); window.removeEventListener('message', handler); reject(new Error(e.data.message)); }}
+                }};
+                window.addEventListener('message', handler);
+                iframe.contentWindow.postMessage('captureMap', '*');
             }});
+            var img = new Image();
+            img.src = mapDataUrl;
+            await new Promise(function(resolve, reject) {{ img.onload = resolve; img.onerror = reject; }});
             var lr = layout.getBoundingClientRect();
             var ir = iframe.getBoundingClientRect();
-            ctx.drawImage(mapCanvas, (ir.left - lr.left) * sc, (ir.top - lr.top) * sc, ir.width * sc, ir.height * sc);
+            ctx.drawImage(img, (ir.left - lr.left) * sc, (ir.top - lr.top) * sc, ir.width * sc, ir.height * sc);
         }} catch(e2) {{
-            console.warn('iframe capture failed:', e2);
+            console.warn('iframe capture via postMessage failed:', e2);
         }}
         return layoutCanvas;
     }} catch(e) {{ throw e; }}
