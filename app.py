@@ -644,12 +644,12 @@ def add_header_bar(fig, logo_img, map_name, project_name, total_area_ha):
     logo_x = 0.01
     if logo_img:
         logo_aspect = logo_img.width / logo_img.height
-        logo_h = 0.045 / (0.065 * fig_h) * fig_h
-        logo_w = logo_h * logo_aspect
-        logo_ax = fig.add_axes([logo_x, 0.94, logo_w / fig_w, 0.045 / fig_h], zorder=21)
+        logo_height_fig = 0.04
+        logo_width_fig = logo_height_fig * logo_aspect * (fig_h / fig_w)
+        logo_ax = fig.add_axes([logo_x, 0.94, logo_width_fig, logo_height_fig], zorder=21)
         logo_ax.imshow(logo_img)
         logo_ax.axis('off')
-        logo_x += logo_w / fig_w + 0.005
+        logo_x += logo_width_fig + 0.005
 
     title = map_name or "Mapa"
     if total_area_ha > 0:
