@@ -669,6 +669,13 @@ def load_polygon(uploaded_file):
         return ensure_crs(read_kmz(file_bytes))
     elif fname.endswith(".zip"):
         return ensure_crs(read_shapefile_zip(file_bytes))
+    elif fname.endswith(".shp"):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shp_path = os.path.join(tmpdir, uploaded_file.name)
+            with open(shp_path, "wb") as f:
+                f.write(file_bytes)
+            os.environ["SHAPE_RESTORE_SHX"] = "YES"
+            return ensure_crs(gpd.read_file(shp_path))
     elif fname.endswith(".geojson") or fname.endswith(".json"):
         with tempfile.NamedTemporaryFile(suffix=".geojson", delete=False) as f:
             f.write(file_bytes)
@@ -908,17 +915,26 @@ def main():
                     color_idx = 0
 
                     for base, group in shp_groups.items():
-                        try:
-                            gdf = load_shapefile_set(group)
-                            if gdf.empty:
-                                st.warning(f"'{base}.shp' no contiene geometrías válidas, se omite.")
-                                continue
-                            fc, ec = LAYER_COLORS[color_idx % len(LAYER_COLORS)]
-                            color_idx += 1
-                            layers.append((gdf, base, fc, ec))
-                            st.success(f"✓ {base}: {len(gdf)} geometría(s)")
-                        except Exception as e:
-                            st.warning(f"Error al cargar shapefile '{base}': {e}")
+                        has_shp = any(os.path.splitext(uf.name)[1].lower() == ".shp" for uf in group)
+                        has_companions = len(group) > 1
+                        if has_shp and has_companions:
+                            try:
+                                gdf = load_shapefile_set(group)
+                                if gdf.empty:
+                                    st.warning(f"'{base}.shp' no contiene geometrías válidas, se omite.")
+                                    continue
+                                fc, ec = LAYER_COLORS[color_idx % len(LAYER_COLORS)]
+                                color_idx += 1
+                                layers.append((gdf, base, fc, ec))
+                                st.success(f"✓ {base}: {len(gdf)} geometría(s)")
+                            except Exception as e:
+                                st.warning(f"Error al cargar shapefile '{base}': {e}")
+                        elif has_shp:
+                            for uf in group:
+                                non_shp.append(uf)
+                        else:
+                            for uf in group:
+                                non_shp.append(uf)
 
                     for uf in non_shp:
                         try:
