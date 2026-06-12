@@ -62,6 +62,265 @@ ctx_providers = {
 
 LABEL_COLUMNS = ["name", "nombre", "Name", "NOMBRE", "label", "etiqueta", "desc", "descripcion", "Descripcion"]
 
+NATURA_ADDRESS = "Ingeniero López 236, Torre 2, Piso 6-A · Córdoba, Argentina (CP 5000)"
+NATURA_WEB = "www.naturainternational.org"
+
+
+def _get_geom_type(gdf):
+    types = gdf.geometry.geom_type.unique()
+    if any(t in ("Polygon", "MultiPolygon") for t in types):
+        return "polygon"
+    elif any(t in ("LineString", "MultiLineString") for t in types):
+        return "line"
+    elif any(t in ("Point", "MultiPoint") for t in types):
+        return "point"
+    return "polygon"
+
+
+def _build_interactive_template(
+    layers, project_name, map_name, logo_path=None,
+):
+    legend_items = ""
+    total_area_ha = 0.0
+    for gdf, layer_name, fill_color, edge_color in layers:
+        if gdf.empty:
+            continue
+        geom_type = _get_geom_type(gdf)
+        if geom_type == "polygon":
+            legend_items += f'''
+            <li><div class="legend-color" style="background:{fill_color}; border:1px solid {edge_color};"></div> <span>{layer_name}</span></li>'''
+        elif geom_type == "line":
+            legend_items += f'''
+            <li><div class="legend-line" style="background:{edge_color}; height:3px; width:28px;"></div> <span>{layer_name}</span></li>'''
+        elif geom_type == "point":
+            legend_items += f'''
+            <li><div class="circle-icon" style="background:{fill_color}; border-color:{edge_color};"></div> <span>{layer_name}</span></li>'''
+        g = gdf.copy()
+        if g.crs is None:
+            g = g.set_crs("EPSG:4326")
+        g = g.to_crs("EPSG:3857")
+        area_m2 = g.area.sum()
+        total_area_ha += area_m2 / 10000
+
+    if total_area_ha >= 100:
+        area_str = f"{total_area_ha:,.0f} ha"
+    else:
+        area_str = f"{total_area_ha:,.2f} ha"
+
+    logo_html = ""
+    if logo_path and os.path.exists(logo_path):
+        try:
+            with open(logo_path, "rb") as f:
+                import base64
+                b64 = base64.b64encode(f.read()).decode()
+            logo_html = f'<img class="header-logo" src="data:image/png;base64,{b64}" alt="Logo">'
+        except Exception:
+            pass
+
+    title_display = map_name or "Mapa"
+    project_display = project_name or ""
+
+    template = f'''
+    <style>
+        .map-header {{
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 10000;
+            background: #2c3e2f;
+            color: white;
+            padding: 5px 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            min-height: 52px;
+            gap: 4px;
+        }}
+        .map-header .header-left {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 200px;
+        }}
+        .map-header .header-logo {{
+            height: 32px;
+            width: auto;
+            object-fit: contain;
+        }}
+        .map-header .header-info {{
+            line-height: 1.3;
+        }}
+        .map-header .header-info a {{
+            color: #ffde9c;
+            text-decoration: none;
+        }}
+        .map-header .header-title {{
+            font-weight: bold;
+            background: #4a6a3b;
+            padding: 3px 14px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            text-align: center;
+            flex-shrink: 0;
+        }}
+        .map-legend {{
+            position: fixed;
+            bottom: 42px;
+            left: 12px;
+            z-index: 10000;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(3px);
+            border-radius: 12px;
+            padding: 10px 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border-left: 6px solid #3c6e3f;
+            min-width: 200px;
+            font-size: 12px;
+            line-height: 1.4;
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            pointer-events: auto;
+            max-height: 55vh;
+            overflow-y: auto;
+        }}
+        .map-legend h4 {{
+            margin: 0 0 6px 0;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #2c3e2f;
+            border-bottom: 1px solid #ccc;
+            display: inline-block;
+            padding-right: 10px;
+        }}
+        .map-legend ul {{
+            list-style: none;
+            padding-left: 0;
+            margin: 6px 0 0 0;
+        }}
+        .map-legend li {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            gap: 8px;
+            font-size: 11px;
+        }}
+        .legend-color {{
+            width: 26px;
+            height: 12px;
+            display: inline-block;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }}
+        .legend-line {{
+            width: 26px;
+            height: 3px;
+            display: inline-block;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }}
+        .circle-icon {{
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1.5px solid;
+            display: inline-block;
+            flex-shrink: 0;
+        }}
+        .map-legend .legend-footer {{
+            font-size: 9px;
+            margin-top: 8px;
+            border-top: 1px solid #ddd;
+            padding-top: 5px;
+            color: #4e5e4a;
+            text-align: center;
+            line-height: 1.3;
+        }}
+        .map-footer {{
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 10000;
+            background: #f8f9f4;
+            padding: 4px 12px;
+            font-size: 10px;
+            color: #2d3e2a;
+            border-top: 1px solid #cbd5c0;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            font-family: monospace;
+            min-height: 28px;
+            align-items: center;
+        }}
+        .map-footer a {{
+            color: #2c6e2f;
+            text-decoration: none;
+        }}
+        .map-footer .scale-note {{
+            font-weight: 500;
+            background: #e9ece5;
+            padding: 1px 8px;
+            border-radius: 20px;
+        }}
+        .folium-map {{
+            margin-top: 58px !important;
+            margin-bottom: 28px !important;
+        }}
+        .leaflet-control-layers {{
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+        }}
+        .leaflet-control-scale {{
+            font-size: 10px !important;
+            background: rgba(255,255,240,0.9) !important;
+            padding: 2px 5px !important;
+            border-radius: 6px !important;
+        }}
+        @media (max-width: 650px) {{
+            .map-header {{ font-size: 0.65rem; padding: 4px 8px; min-height: 42px; }}
+            .map-header .header-logo {{ height: 24px; }}
+            .map-header .header-title {{ font-size: 0.6rem; padding: 2px 10px; }}
+            .map-legend {{ font-size: 10px; padding: 6px 10px; min-width: 150px; bottom: 34px; left: 6px; }}
+            .map-legend li {{ font-size: 10px; }}
+            .map-footer {{ font-size: 8px; padding: 2px 6px; }}
+            .folium-map {{ margin-top: 46px !important; margin-bottom: 24px !important; }}
+        }}
+    </style>
+    <div class="map-header">
+        <div class="header-left">
+            {logo_html}
+            <div class="header-info">
+                🗺️ Departamento Técnico · {NATURA_ADDRESS}<br>
+                🌐 <a href="https://{NATURA_WEB}" target="_blank">{NATURA_WEB}</a>
+            </div>
+        </div>
+        <div class="header-title">
+            {title_display}{' · ' + area_str if area_str else ''}{' · ' + project_display if project_display else ''}
+        </div>
+    </div>
+    <div class="map-legend">
+        <h4>📖 Referencias del mapa</h4>
+        <ul>
+            {legend_items}
+        </ul>
+        <div class="legend-footer">
+            🧭 Elaboración: Dpto. Técnico{ ' · ' + project_display if project_display else ''}<br>
+            Escala gráfica 0-10-20 km · Datos referenciales de campo
+        </div>
+    </div>
+    <div class="map-footer">
+        <span>📌 Referencias cartográficas oficiales · Base: OpenStreetMap</span>
+        <span class="scale-note">⚖️ Escala gráfica: 0 — 10 — 20 km (control inferior izquierdo)</span>
+        <span>📍 Coordenadas aproximadas</span>
+    </div>
+    '''
+    return template
+
+
 LAYER_COLORS = [
     ("#FF1744", "#C62828"),  # Rojo
     ("#FF9100", "#E65100"),  # Naranja
@@ -89,6 +348,24 @@ def read_kml(file_bytes):
         return gdf
     finally:
         os.unlink(path)
+
+
+def read_kmz(file_bytes):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = os.path.join(tmpdir, "doc.kmz")
+        with open(zip_path, "wb") as f:
+            f.write(file_bytes)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(tmpdir)
+        kml_files = []
+        for root, _dirs, files in os.walk(tmpdir):
+            for f in files:
+                if f.endswith(".kml"):
+                    kml_files.append(os.path.join(root, f))
+        if not kml_files:
+            raise ValueError("No se encontró un archivo .kml dentro del KMZ")
+        gdf = gpd.read_file(kml_files[0], driver="KML")
+        return gdf
 
 
 def read_shapefile_zip(file_bytes):
@@ -121,8 +398,10 @@ def load_polygon(uploaded_file):
     file_bytes = uploaded_file.getvalue()
     fname = uploaded_file.name.lower()
 
-    if fname.endswith(".kml") or fname.endswith(".kmz"):
+    if fname.endswith(".kml"):
         return ensure_crs(read_kml(file_bytes))
+    elif fname.endswith(".kmz"):
+        return ensure_crs(read_kmz(file_bytes))
     elif fname.endswith(".zip"):
         return ensure_crs(read_shapefile_zip(file_bytes))
     elif fname.endswith(".shp"):
@@ -147,7 +426,7 @@ def load_polygon(uploaded_file):
         )
 
 
-def create_interactive_map(layers, basemap_name, project_name, map_name, include_labels=False):
+def create_interactive_map(layers, basemap_name, project_name, map_name, include_labels=False, logo_path=None):
     if not layers:
         return None
 
@@ -195,29 +474,10 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
         )
         geo_json.add_to(m)
 
-    if map_name:
-        title_html = f"""
-        <div style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-                    z-index: 9999; background: white; padding: 8px 24px;
-                    border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                    font-family: sans-serif; font-size: 18px; font-weight: bold;
-                    text-align: center; pointer-events: none;">
-            {map_name}
-        </div>
-        """
-        m.get_root().html.add_child(folium.Element(title_html))
-
-    if project_name:
-        subtitle_html = f"""
-        <div style="position: fixed; top: 52px; left: 50%; transform: translateX(-50%);
-                    z-index: 9999; background: rgba(255,255,255,0.9); padding: 4px 16px;
-                    border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-                    font-family: sans-serif; font-size: 13px; color: #555;
-                    text-align: center; pointer-events: none;">
-            {project_name}
-        </div>
-        """
-        m.get_root().html.add_child(folium.Element(subtitle_html))
+    custom_template = _build_interactive_template(
+        layers, project_name, map_name, logo_path=logo_path,
+    )
+    m.get_root().html.add_child(folium.Element(custom_template))
 
     plugins.Fullscreen(position="topright").add_to(m)
     plugins.MousePosition(position="bottomright").add_to(m)
@@ -682,10 +942,24 @@ def main():
 
                     if layers:
                         st.session_state["layers"] = layers
+                        preview_logo_path = None
+                        if uploaded_logo:
+                            logo_ext = uploaded_logo.name.split(".")[-1]
+                            tmp_logo = tempfile.NamedTemporaryFile(suffix=f".{logo_ext}", delete=False)
+                            tmp_logo.write(uploaded_logo.getvalue())
+                            tmp_logo.close()
+                            preview_logo_path = tmp_logo.name
+                        elif os.path.exists(LOGO_DEFAULT):
+                            preview_logo_path = LOGO_DEFAULT
                         m = create_interactive_map(
                             layers, basemap_name, project_name, map_name,
-                            include_labels=True,
+                            include_labels=True, logo_path=preview_logo_path,
                         )
+                        if preview_logo_path and preview_logo_path != LOGO_DEFAULT:
+                            try:
+                                os.unlink(preview_logo_path)
+                            except Exception:
+                                pass
                         if m:
                             st_folium(m, width=None, height=500)
                     else:
@@ -787,13 +1061,28 @@ def main():
                     else:
                         gdf_html = gdf
                     html_layers.append((gdf_html, layer_name, fc, ec))
+                export_logo_path = None
+                if uploaded_logo:
+                    logo_ext = uploaded_logo.name.split(".")[-1]
+                    tmp_logo = tempfile.NamedTemporaryFile(suffix=f".{logo_ext}", delete=False)
+                    tmp_logo.write(uploaded_logo.getvalue())
+                    tmp_logo.close()
+                    export_logo_path = tmp_logo.name
+                elif os.path.exists(LOGO_DEFAULT):
+                    export_logo_path = LOGO_DEFAULT
                 m = create_interactive_map(
                     html_layers,
                     basemap_name,
                     project_name,
                     map_name,
                     include_labels=include_labels,
+                    logo_path=export_logo_path,
                 )
+                if export_logo_path and export_logo_path != LOGO_DEFAULT:
+                    try:
+                        os.unlink(export_logo_path)
+                    except Exception:
+                        pass
                 html_bytes = m._repr_html_().encode("utf-8")
                 st.download_button(
                     label="Descargar HTML",
