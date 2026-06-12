@@ -760,7 +760,7 @@ window.__toggleLayer = function(layerId, visible) {
         }
         if (!m) return;
         m.eachLayer(function(layer) {
-            if (layer.options && layer.options.layer_id === layerId) {
+            if (layer.options && layer.options.layerId === layerId) {
                 if (visible) m.addLayer(layer);
                 else m.removeLayer(layer);
             }
