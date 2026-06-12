@@ -36,7 +36,7 @@ BASEMAP_ATTRS = {
 LABEL_COLUMNS = ["name", "nombre", "Name", "NOMBRE", "label", "etiqueta", "desc", "descripcion", "Descripcion"]
 
 NATURA_ADDRESS = "Ingeniero López 236, Torre 2, Piso 6-A · Córdoba, Argentina (CP 5000)"
-NATURA_WEB = "www.naturainternational.org"
+NATURA_WEB = "naturainternational.org"
 
 
 def _get_geom_type(gdf):
@@ -316,7 +316,7 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
 
     import json as _json
     # Escape the folium HTML for embedding in JS template literal
-    folium_json_str = _json.dumps(fig_map_html)
+    folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
     html = f'''<!DOCTYPE html>
 <html lang="es">
