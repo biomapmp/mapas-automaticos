@@ -726,15 +726,14 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
             label_col = _detect_label_column(gdf)
             if label_col is not None:
                 tooltip = folium.GeoJsonTooltip(fields=[label_col], labels=False, sticky=True)
-        fg = folium.FeatureGroup(name=f"layer_{i}", show=True)
         geo_json = folium.GeoJson(
             gdf.to_json(),
             style_function=lambda x, s=style: s,
             name=layer_name,
             tooltip=tooltip,
+            layer_id=f"layer_{i}",
         )
-        geo_json.add_to(fg)
-        fg.add_to(m)
+        geo_json.add_to(m)
 
     custom_template = _build_interactive_template(
         layers, project_name, map_name, logo_path=logo_path,
@@ -754,7 +753,7 @@ window.__toggleLayer = function(layerId, visible) {
         }
         if (!m) return;
         m.eachLayer(function(layer) {
-            if (layer.options && layer.options.name === layerId) {
+            if (layer.options && layer.options.layer_id === layerId) {
                 if (visible) m.addLayer(layer);
                 else m.removeLayer(layer);
             }
