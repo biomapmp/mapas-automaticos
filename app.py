@@ -311,7 +311,7 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
     folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
     basemap_variants_escaped = basemap_variants or {basemap_name: fig_map_html}
-    _capture_script = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script>window.addEventListener("message",async function(e){if(e.data==="captureMap"){try{var d=document.querySelector("[id^=\\"map_\\"]");var c=await html2canvas(d,{scale:2,useCORS:true,allowTaint:false,backgroundColor:"#e8ece8"});e.source.postMessage({type:"mapCapture",dataUrl:c.toDataURL("image/png")},"*")}catch(err){e.source.postMessage({type:"mapCaptureError",message:err.message},"*")}}});</script>'
+    _capture_script = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script>window.addEventListener("message",async function(e){if(e.data==="captureMap"){try{var d=document.querySelector("[id^=\\"map_\\"]");var m=window[d&&d.id];if(m&&m.invalidateSize){m._origInvalidate=m.invalidateSize;m.invalidateSize=function(){return this}}var c=await html2canvas(d,{scale:2,useCORS:true,allowTaint:false,backgroundColor:"#e8ece8"});if(m&&m._origInvalidate){m.invalidateSize=m._origInvalidate;delete m._origInvalidate}e.source.postMessage({type:"mapCapture",dataUrl:c.toDataURL("image/png")},"*")}catch(err){e.source.postMessage({type:"mapCaptureError",message:err.message},"*")}}});</script>'
     for k in list(basemap_variants_escaped.keys()):
         basemap_variants_escaped[k] = basemap_variants_escaped[k].replace('</body>', _capture_script + '</body>')
     basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False).replace('</script>', '<\\/script>')
@@ -520,35 +520,40 @@ function switchBasemap(name) {{
 
 async function captureLayout() {{
     var layout = document.getElementById('printLayout');
+    var leftPanel = layout.querySelector('.left-panel');
+    var mapArea = layout.querySelector('.map-area');
     var iframe = document.getElementById('mapIframe');
-    if (!layout || !iframe) return null;
+    if (!layout || !iframe || !leftPanel || !mapArea) return null;
     var sc = 2;
     try {{
-        var layoutCanvas = await html2canvas(layout, {{
+        var leftCanvas = await html2canvas(leftPanel, {{
             scale: sc, useCORS: true, allowTaint: false,
-            backgroundColor: '#ffffff', logging: false,
+            backgroundColor: '#fafaf8', logging: false,
         }});
-        var ctx = layoutCanvas.getContext('2d');
-        try {{
-            var mapDataUrl = await new Promise(function(resolve, reject) {{
-                var t = setTimeout(function() {{ reject(new Error('timeout')); }}, 20000);
-                var handler = function(e) {{
-                    if (e.data && e.data.type === 'mapCapture') {{ clearTimeout(t); window.removeEventListener('message', handler); resolve(e.data.dataUrl); }}
-                    if (e.data && e.data.type === 'mapCaptureError') {{ clearTimeout(t); window.removeEventListener('message', handler); reject(new Error(e.data.message)); }}
-                }};
-                window.addEventListener('message', handler);
-                iframe.contentWindow.postMessage('captureMap', '*');
-            }});
-            var img = new Image();
-            img.src = mapDataUrl;
-            await new Promise(function(resolve, reject) {{ img.onload = resolve; img.onerror = reject; }});
-            var lr = layout.getBoundingClientRect();
-            var ir = iframe.getBoundingClientRect();
-            ctx.drawImage(img, (ir.left - lr.left) * sc, (ir.top - lr.top) * sc, ir.width * sc, ir.height * sc);
-        }} catch(e2) {{
-            console.warn('iframe capture via postMessage failed:', e2);
-        }}
-        return layoutCanvas;
+        var mapDataUrl = await new Promise(function(resolve, reject) {{
+            var t = setTimeout(function() {{ reject(new Error('timeout')); }}, 20000);
+            var handler = function(e) {{
+                if (e.data && e.data.type === 'mapCapture') {{ clearTimeout(t); window.removeEventListener('message', handler); resolve(e.data.dataUrl); }}
+                if (e.data && e.data.type === 'mapCaptureError') {{ clearTimeout(t); window.removeEventListener('message', handler); reject(new Error(e.data.message)); }}
+            }};
+            window.addEventListener('message', handler);
+            iframe.contentWindow.postMessage('captureMap', '*');
+        }});
+        var mapImg = new Image();
+        mapImg.src = mapDataUrl;
+        await new Promise(function(resolve, reject) {{ mapImg.onload = resolve; mapImg.onerror = reject; }});
+        var lr = layout.getBoundingClientRect();
+        var leftR = leftPanel.getBoundingClientRect();
+        var maR = mapArea.getBoundingClientRect();
+        var outW = lr.width * sc, outH = lr.height * sc;
+        var outCanvas = document.createElement('canvas');
+        outCanvas.width = outW; outCanvas.height = outH;
+        var ctx = outCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, outW, outH);
+        ctx.drawImage(leftCanvas, (leftR.left - lr.left) * sc, (leftR.top - lr.top) * sc);
+        ctx.drawImage(mapImg, (maR.left - lr.left) * sc, (maR.top - lr.top) * sc, maR.width * sc, maR.height * sc);
+        return outCanvas;
     }} catch(e) {{ throw e; }}
 }}
 async function exportFormat(format) {{
