@@ -354,6 +354,7 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/utif/3.1.0/UTIF.min.js"></script>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
@@ -416,20 +417,22 @@ body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
 .map-area iframe {{ width: 100%; height: 100%; border: none; }}
 
 .export-bar {{
-    max-width: 1200px; margin: 0 auto 20px;
-    padding: 8px 0; display: flex; gap: 8px;
+    max-width: 1200px; margin: 0 auto 10px;
+    padding: 8px 0; display: flex; gap: 6px;
     justify-content: center; flex-wrap: wrap;
 }}
 .export-btn {{
-    padding: 8px 20px; border: none; border-radius: 6px;
-    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    padding: 7px 14px; border: none; border-radius: 6px;
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px;
     cursor: pointer; color: white; transition: opacity 0.2s;
 }}
 .export-btn:hover {{ opacity: 0.85; }}
 .btn-png {{ background: #2d6a2b; }}
 .btn-jpg {{ background: #e87c1f; }}
+.btn-tiff {{ background: #4a2a1a; }}
+.btn-webp {{ background: #1565C0; }}
 .btn-pdf {{ background: #c22d2d; }}
-.btn-html {{ background: #1f3b2c; }}
+.btn-print {{ background: #555; }}
 
 @media print {{
     .export-bar {{ display: none !important; }}
@@ -442,8 +445,10 @@ body {{ font-family:'Inter','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
 <div class="export-bar" id="exportBar">
     <button class="export-btn btn-png" onclick="exportFormat('png')">PNG</button>
     <button class="export-btn btn-jpg" onclick="exportFormat('jpeg')">JPEG</button>
+    <button class="export-btn btn-tiff" onclick="exportFormat('tiff')">TIFF</button>
+    <button class="export-btn btn-webp" onclick="exportFormat('webp')">WEBP</button>
     <button class="export-btn btn-pdf" onclick="exportFormat('pdf')">PDF</button>
-    <button class="export-btn btn-html" onclick="window.print()">Imprimir</button>
+    <button class="export-btn btn-print" onclick="window.print()">Imprimir</button>
 </div>
 
 <div class="print-layout" id="printLayout">
@@ -509,17 +514,29 @@ async function exportFormat(format) {{
             backgroundColor: '#ffffff', logging: false,
             width: layout.scrollWidth, height: layout.scrollHeight,
         }});
+        var fn = '{title_display}';
         if (format === 'pdf') {{
             var imgData = canvas.toDataURL('image/png');
             var pdf = new jspdf.jsPDF('landscape', 'px', [canvas.width, canvas.height]);
             pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-            pdf.save('{title_display}.pdf');
-        }} else {{
-            var mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-            var ext = format === 'jpeg' ? 'jpg' : 'png';
+            pdf.save(fn + '.pdf');
+        }} else if (format === 'tiff') {{
+            var ctx = canvas.getContext('2d');
+            var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            var tiffData = UTIF.encode(imgData.data, canvas.width, canvas.height);
+            var blob = new Blob([tiffData], {{type: 'image/tiff'}});
             var link = document.createElement('a');
-            link.download = '{title_display}.' + ext;
-            link.href = canvas.toDataURL(mime, format === 'jpeg' ? 0.95 : undefined);
+            link.href = URL.createObjectURL(blob);
+            link.download = fn + '.tiff';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }} else {{
+            var mime = {{png:'image/png',jpeg:'image/jpeg',webp:'image/webp'}}[format] || 'image/png';
+            var ext = {{png:'png',jpeg:'jpg',webp:'webp'}}[format] || 'png';
+            var qual = format === 'jpeg' ? 0.95 : (format === 'webp' ? 0.9 : undefined);
+            var link = document.createElement('a');
+            link.download = fn + '.' + ext;
+            link.href = canvas.toDataURL(mime, qual);
             link.click();
         }}
     }} catch(e) {{ alert('Error al exportar: ' + e.message); }}
