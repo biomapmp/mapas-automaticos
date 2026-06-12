@@ -203,9 +203,6 @@ def _build_interactive_template(
             Datos técnicos de campo · Relevamiento Natura Argentina
         </div>
     </div>
-    <div class="footer-credits">
-        www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
-    </div>
     '''
     return template
 
