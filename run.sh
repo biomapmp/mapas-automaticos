@@ -6,7 +6,7 @@ if [ ! -d "$VENV" ]; then
     echo "Creando entorno virtual..."
     python3 -m venv "$VENV"
     source "$VENV/bin/activate"
-    pip install "numpy<2" "pandas<2.2" geopandas folium streamlit streamlit-folium contextily matplotlib shapely Pillow
+    pip install geopandas folium streamlit streamlit-folium
 else
     source "$VENV/bin/activate"
 fi
