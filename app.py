@@ -198,12 +198,22 @@ def _build_interactive_template(
         <p><span class="info-label">Fecha:</span><span class="info-value">{today_str}</span></p>
         {location_info}
         <div class="info-footer">
+            <div id="qrContainer" style="margin-bottom:4px;"></div>
             Datos técnicos de campo · Relevamiento Natura Argentina
         </div>
     </div>
     <div class="footer-credits">
         www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+    const qrData = `Departamento Técnico
+Ingeniero L\u00f3pez 236. Torre 2. Piso 6-A
+C\u00f3rdoba. Argentina. C.P 5000.
+Natura ARGENTINA
+www.naturainternational.org`;
+    new QRCode(document.getElementById("qrContainer"), {{ text: qrData, width: 90, height: 90 }});
+    </script>
     '''
     return template
 
@@ -321,6 +331,7 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/utif/3.1.0/UTIF.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f0; }}
@@ -472,6 +483,9 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
             www.{NATURA_WEB}<br>
             {NATURA_ADDRESS}
         </div>
+        <div style="display:flex;justify-content:center;margin-top:4px;">
+            <div id="qrPrint" style="width:60px;height:60px;"></div>
+        </div>
     </div>
 
     <div class="map-area" id="mapArea">
@@ -525,7 +539,13 @@ async function exportFormat(format) {{
             link.click();
         }}
     }} catch(e) {{ alert('Error al exportar: ' + e.message); }}
-}}
+}};
+const qrPrintData = `Departamento Técnico
+Ingeniero L\u00f3pez 236. Torre 2. Piso 6-A
+C\u00f3rdoba. Argentina. C.P 5000.
+Natura ARGENTINA
+www.naturainternational.org`;
+new QRCode(document.getElementById("qrPrint"), {{ text: qrPrintData, width: 60, height: 60 }});
 </script>
 
 </body>
