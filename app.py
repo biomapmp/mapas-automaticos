@@ -583,41 +583,6 @@ def add_map_border(ax):
     ax.add_patch(rect)
 
 
-def add_title_box(fig, map_name, project_name):
-    """Add title box at the top-left of the figure."""
-    text_lines = []
-    if map_name:
-        text_lines.append(map_name)
-    if project_name:
-        text_lines.append(project_name)
-    if not text_lines:
-        return
-
-    title_text = "\n".join(text_lines)
-    fig.text(
-        0.5, 0.97, title_text,
-        fontsize=20, fontweight="bold", color="#111111",
-        va="top", ha="center",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="black", alpha=0.85),
-    )
-
-
-def add_logo_box(fig, logo_img):
-    """Add logo at the bottom-left of the figure."""
-    if logo_img is None:
-        return
-    logo_aspect = logo_img.width / logo_img.height
-    logo_w_in = 2.0
-    logo_h_in = logo_w_in / logo_aspect
-    fig_w, fig_h = fig.get_size_inches()
-    ax_logo = fig.add_axes(
-        [0.015, 0.015, logo_w_in / fig_w, logo_h_in / fig_h],
-        zorder=10,
-    )
-    ax_logo.imshow(logo_img)
-    ax_logo.axis("off")
-
-
 def add_scale_bar_map(ax, gdf_m):
     """Add a scale bar in the bottom-center of the map."""
     bounds = gdf_m.total_bounds
@@ -667,64 +632,149 @@ def add_north_arrow_map(ax, gdf_m):
             ha="center", va="bottom", fontsize=11, fontweight="bold", zorder=6)
 
 
-def add_legend(fig, ax, layers):
-    from matplotlib.lines import Line2D
-    legend_elem = []
-    for gdf, layer_name, fill_color, edge_color in layers:
-        label = layer_name or "Capa"
-        legend_elem.append(
-            Line2D([0], [0], marker="s", color="w", markerfacecolor=fill_color,
-                   markeredgecolor=edge_color, markersize=10, label=label),
-        )
-    leg = fig.legend(
-        handles=legend_elem,
-        loc="upper left",
-        bbox_to_anchor=(0.02, 0.65),
-        fontsize=10,
-        framealpha=0.9,
-        edgecolor="black",
-        facecolor="white",
-        title="Leyenda",
-        title_fontsize=11,
-    )
-    leg.get_title().set_fontweight("bold")
+def add_header_bar(fig, logo_img, map_name, project_name, total_area_ha):
+    HEADER_GREEN = '#1f3b2c'
+    GOLD = '#b7b87b'
+    fig_w, fig_h = fig.get_size_inches()
+
+    ax = fig.add_axes([0, 0.935, 1, 0.065], zorder=20)
+    ax.set_facecolor(HEADER_GREEN)
+    ax.axis('off')
+
+    logo_x = 0.01
+    if logo_img:
+        logo_aspect = logo_img.width / logo_img.height
+        logo_h = 0.045 / (0.065 * fig_h) * fig_h
+        logo_w = logo_h * logo_aspect
+        logo_ax = fig.add_axes([logo_x, 0.94, logo_w / fig_w, 0.045 / fig_h], zorder=21)
+        logo_ax.imshow(logo_img)
+        logo_ax.axis('off')
+        logo_x += logo_w / fig_w + 0.005
+
+    title = map_name or "Mapa"
+    if total_area_ha > 0:
+        area_str = f"{total_area_ha:,.0f}" if total_area_ha >= 100 else f"{total_area_ha:,.2f}"
+        title += f" · {area_str} ha"
+    if project_name:
+        title += f" · {project_name}"
+
+    ax.text(0.5, 0.45, f"📍 {title}",
+            fontsize=11, fontweight='600', color='white',
+            ha='center', va='center',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=11))
+
+    # Department info on right
+    ax.text(0.98, 0.45, f"🏢 Dpto. Técnico | {NATURA_ADDRESS}",
+            fontsize=7, color='white', ha='right', va='center',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=7))
+
+    # Brand on left
+    brand_text = "🌿 NaturaArgentina"
+    ax.text(logo_x + 0.005, 0.65, brand_text,
+            fontsize=12, fontweight='800', color='#f5e7b2', ha='left', va='center',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=12))
+    ax.text(logo_x + 0.005, 0.25, "Conservación · Investigación · Territorios",
+            fontsize=7, color='white', ha='left', va='center',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=7))
 
 
-def add_info_box(fig, project_name, map_name, layers):
-    NATURA_GREEN = "#2D6A4F"
-    DARK = "#222222"
+def add_footer_bar(fig):
+    ax = fig.add_axes([0, 0, 1, 0.035], zorder=20)
+    ax.set_facecolor('#eaf2e5')
+    ax.axis('off')
+    ax.text(0.5, 0.5,
+            f"🌎 www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática",
+            fontsize=7, color='#2b482f', ha='center', va='center',
+            fontproperties=FontProperties(family='monospace', size=7))
+
+
+def add_static_info_card(fig, project_name, map_name, layers, total_area_ha, total_area_km2, center_lat, center_lng):
+    NATURA_GREEN = '#4c9f70'
+
+    ax = fig.add_axes([0.69, 0.14, 0.28, 0.36], zorder=15)
+    ax.set_facecolor('white')
+    ax.patch.set_edgecolor('#dddddd')
+    ax.patch.set_linewidth(0.5)
+    ax.set_frame_on(True)
+    ax.tick_params(left=False, labelleft=False, bottom=False, labelbottom=False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.spines['left'].set_visible(True)
+    ax.spines['left'].set_color(NATURA_GREEN)
+    ax.spines['left'].set_linewidth(4)
 
     lines = []
-    lines.append(f"Proyecto: {project_name}")
-    lines.append(f"Mapa: {map_name}")
+    lines.append(('📋 Información del área', 'title'))
+    lines.append(('📍 Ubicación:', project_name or 'Área de interés'))
+    if total_area_ha > 0:
+        area_h = f"{total_area_ha:,.0f}" if total_area_ha >= 100 else f"{total_area_ha:,.2f}"
+        area_k = f"{total_area_km2:,.0f}" if total_area_km2 >= 100 else f"{total_area_km2:,.2f}"
+        lines.append(('📐 Superficie:', f"{area_h} hectáreas ({area_k} km²)"))
+    lines.append(('🗺️ Referencia:', map_name or '—'))
+    lines.append(('📅 Fecha base:', datetime.now().strftime("%B %Y")))
+    if center_lat and center_lng:
+        lines.append(('📌 Coordenadas:', f"Lat {center_lat} / Lon {center_lng} (centroide)"))
 
-    total_area = 0
-    total_perim = 0
-    for gdf, layer_name, _fc, _ec in layers:
-        area_3857 = gdf.to_crs("EPSG:3857")
-        area_km2 = area_3857.area.sum() / 1_000_000
-        perim_m = area_3857.length.sum()
-        perim_km = perim_m / 1000
-        total_area += area_km2
-        total_perim += perim_km
-        lines.append(f"{layer_name}: {area_km2:,.2f} km² / {perim_km:,.2f} km")
+    y = 0.92
+    for i, (label, value) in enumerate(lines):
+        if i == 0:
+            ax.text(0.08, y, label, fontsize=12, fontweight='700', color='#1e3b2a', va='top',
+                    fontproperties=FontProperties(family=FONT_FAMILY, size=12))
+            y -= 0.09
+            continue
+        ax.text(0.08, y, label, fontsize=7.5, fontweight='700', color='#2c6e3c', va='top',
+                fontproperties=FontProperties(family=FONT_FAMILY, size=7.5))
+        ax.text(0.45, y, str(value), fontsize=7.5, fontweight='500', color='#1c2c1a', va='top',
+                fontproperties=FontProperties(family=FONT_FAMILY, size=7.5))
+        y -= 0.07
 
-    if len(layers) > 1:
-        lines.append(f"Total: {total_area:,.2f} km² / {total_perim:,.2f} km")
+    ax.text(0.5, 0.04, '🌱 Datos técnicos de campo · Relevamiento Natura Argentina',
+            fontsize=6.5, color='#4f6b4a', ha='center', va='bottom',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=6.5))
 
-    data_text = "\n".join(lines)
 
-    fig.text(
-        0.02, 0.87, "Departamento Técnico",
-        fontsize=12, fontweight="bold", fontproperties=FontProperties(family=FONT_FAMILY, size=12), color=NATURA_GREEN,
-        va="top", ha="left",
-    )
-    fig.text(
-        0.02, 0.84, data_text,
-        fontsize=12, fontproperties=FontProperties(family=FONT_FAMILY, size=12, weight="bold"), color=DARK,
-        va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", edgecolor=NATURA_GREEN, alpha=0.95, linewidth=1.2),
-    )
+def add_static_legend_card(fig, layers):
+    from matplotlib.patches import Rectangle, Circle
+
+    ax = fig.add_axes([0.03, 0.14, 0.23, 0.36], zorder=15)
+    ax.set_facecolor('white')
+    ax.patch.set_edgecolor('#dddddd')
+    ax.patch.set_linewidth(0.5)
+    ax.set_frame_on(True)
+    ax.tick_params(left=False, labelleft=False, bottom=False, labelbottom=False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.spines['right'].set_visible(True)
+    ax.spines['right'].set_color('#8bb56a')
+    ax.spines['right'].set_linewidth(3)
+
+    ax.text(0.08, 0.92, '📖 Referencias cartográficas', fontsize=11, fontweight='700', color='#2d4a26', va='top',
+            fontproperties=FontProperties(family=FONT_FAMILY, size=11))
+
+    y = 0.82
+    for gdf, layer_name, fill_color, edge_color in layers:
+        if gdf.empty:
+            continue
+        geom_type = _get_geom_type(gdf)
+        if geom_type == 'polygon':
+            rect_sym = Rectangle((0.08, y - 0.025), 0.055, 0.03, facecolor=fill_color, edgecolor=edge_color,
+                                 linewidth=0.5, transform=ax.transAxes, zorder=17)
+            ax.add_patch(rect_sym)
+        elif geom_type == 'line':
+            ax.plot([0.08, 0.135], [y - 0.01, y - 0.01], color=edge_color, linewidth=2,
+                    transform=ax.transAxes, zorder=17, clip_on=False)
+        elif geom_type == 'point':
+            circ = Circle((0.107, y - 0.01), 0.015, facecolor=fill_color, edgecolor=edge_color,
+                          linewidth=0.8, transform=ax.transAxes, zorder=17)
+            ax.add_patch(circ)
+
+        ax.text(0.17, y, layer_name, fontsize=7, color='#1e2a1e', va='center',
+                fontproperties=FontProperties(family=FONT_FAMILY, size=7))
+        y -= 0.065
+
+    ax.text(0.5, 0.04, '⚙️ Escala: 0 — 10 — 20 km (control inf. izq.)\nBase: OpenStreetMap · Capas ajustables',
+            fontsize=6, color='#5b6e53', ha='center', va='bottom', linespacing=1.4,
+            fontproperties=FontProperties(family=FONT_FAMILY, size=6))
 
 
 def _detect_label_column(gdf):
@@ -777,12 +827,34 @@ def create_static_map(
         bounds_4326[1] - ym, bounds_4326[3] + ym,
     ]
 
-    fig = plt.figure(figsize=(16, 12))
+    # Calculate area and centroid
+    total_area_ha = 0.0
+    total_area_km2 = 0.0
+    center_lat = ""
+    center_lng = ""
+    for gdf, _name, _fc, _ec in layers:
+        if gdf.empty:
+            continue
+        g = gdf.copy()
+        if g.crs is None:
+            g = g.set_crs("EPSG:4326")
+        g3857 = g.to_crs("EPSG:3857")
+        area_m2 = g3857.area.sum()
+        total_area_ha += area_m2 / 10000
+        total_area_km2 += area_m2 / 1_000_000
+    try:
+        center_lat = f"{(bounds_4326[1] + bounds_4326[3]) / 2:.2f}"
+        center_lng = f"{(bounds_4326[0] + bounds_4326[2]) / 2:.2f}"
+    except Exception:
+        pass
 
-    map_left = 0.28
-    map_bottom = 0.08
-    map_w = 0.69
-    map_h = 0.70
+    fig = plt.figure(figsize=(16, 11))
+
+    # Map axes (central, most of the figure)
+    map_left = 0.02
+    map_bottom = 0.045
+    map_w = 0.96
+    map_h = 0.88
 
     ax = fig.add_axes([map_left, map_bottom, map_w, map_h])
 
@@ -860,25 +932,29 @@ def create_static_map(
     if include_grid:
         draw_coordinate_grid(ax, extent_4326)
 
-    if include_legend:
-        add_legend(fig, ax, layers)
-
     if include_scale:
         add_scale_bar_map(ax, merged_3857)
 
     if include_north:
         add_north_arrow_map(ax, merged_3857)
 
+    # Header bar
     if logo_path and os.path.exists(logo_path):
         logo_img = Image.open(logo_path)
     else:
         logo_img = None
+    add_header_bar(fig, logo_img, map_name, project_name, total_area_ha)
 
-    add_title_box(fig, map_name, project_name)
-    add_logo_box(fig, logo_img)
+    # Footer bar
+    add_footer_bar(fig)
 
+    # Info card (right overlay)
     if include_infobox:
-        add_info_box(fig, project_name, map_name, layers)
+        add_static_info_card(fig, project_name, map_name, layers, total_area_ha, total_area_km2, center_lat, center_lng)
+
+    # Legend card (left overlay)
+    if include_legend:
+        add_static_legend_card(fig, layers)
 
     return fig
 
