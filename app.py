@@ -82,6 +82,8 @@ def _build_interactive_template(
 ):
     legend_items = ""
     total_area_ha = 0.0
+    total_area_km2 = 0.0
+    has_polygon = False
     for gdf, layer_name, fill_color, edge_color in layers:
         if gdf.empty:
             continue
@@ -89,23 +91,48 @@ def _build_interactive_template(
         if geom_type == "polygon":
             legend_items += f'''
             <li><div class="legend-color" style="background:{fill_color}; border:1px solid {edge_color};"></div> <span>{layer_name}</span></li>'''
+            has_polygon = True
         elif geom_type == "line":
             legend_items += f'''
-            <li><div class="legend-line" style="background:{edge_color}; height:3px; width:28px;"></div> <span>{layer_name}</span></li>'''
+            <li><div class="legend-line" style="background:{edge_color};"></div> <span>{layer_name}</span></li>'''
         elif geom_type == "point":
             legend_items += f'''
-            <li><div class="circle-icon" style="background:{fill_color}; border-color:{edge_color};"></div> <span>{layer_name}</span></li>'''
+            <li><div class="circle-marker" style="background:{fill_color}; border-color:{edge_color};"></div> <span>{layer_name}</span></li>'''
         g = gdf.copy()
         if g.crs is None:
             g = g.set_crs("EPSG:4326")
-        g = g.to_crs("EPSG:3857")
-        area_m2 = g.area.sum()
-        total_area_ha += area_m2 / 10000
+        if not g.empty:
+            g = g.to_crs("EPSG:3857")
+            area_m2 = g.area.sum()
+            total_area_ha += area_m2 / 10000
+            total_area_km2 += area_m2 / 1_000_000
 
     if total_area_ha >= 100:
-        area_str = f"{total_area_ha:,.0f} ha"
+        area_ha_str = f"{total_area_ha:,.0f}"
+        area_km2_str = f"{total_area_km2:,.0f}"
     else:
-        area_str = f"{total_area_ha:,.2f} ha"
+        area_ha_str = f"{total_area_ha:,.2f}"
+        area_km2_str = f"{total_area_km2:,.2f}"
+
+    # Calculate centroid and bounds for info card
+    center_lat = ""
+    center_lng = ""
+    try:
+        all_gdfs = []
+        for gdf, _name, _fc, _ec in layers:
+            if gdf.empty:
+                continue
+            g = gdf.copy()
+            if g.crs is None:
+                g = g.set_crs("EPSG:4326")
+            all_gdfs.append(g.to_crs("EPSG:4326"))
+        if all_gdfs:
+            merged = gpd.pd.concat(all_gdfs, ignore_index=True)
+            bounds = merged.total_bounds
+            center_lat = f"{(bounds[1] + bounds[3]) / 2:.2f}"
+            center_lng = f"{(bounds[0] + bounds[2]) / 2:.2f}"
+    except Exception:
+        pass
 
     logo_html = ""
     if logo_path and os.path.exists(logo_path):
@@ -119,203 +146,174 @@ def _build_interactive_template(
 
     title_display = map_name or "Mapa"
     project_display = project_name or ""
+    today_str = datetime.now().strftime("%B %Y")
+
+    area_info = ""
+    if has_polygon:
+        area_info = f'<p><span class="info-label">📐 Superficie:</span><span class="info-value">{area_ha_str} hectáreas ({area_km2_str} km²)</span></p>'
+
+    location_info = ""
+    if center_lat and center_lng:
+        location_info = f'<p><span class="info-label">📌 Coordenadas:</span><span class="info-value">Lat {center_lat} / Lon {center_lng} (centroide)</span></p>'
+
+    header_title_text = title_display
+    if has_polygon:
+        header_title_text += f" · {area_ha_str} ha"
+    if project_display:
+        header_title_text += f" · {project_display}"
 
     template = f'''
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
-        .map-header {{
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            z-index: 10000;
-            background: #2c3e2f;
-            color: white;
-            padding: 5px 15px;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.78rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
-            min-height: 52px;
-            gap: 4px;
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, sans-serif; background: #eef2f0; color: #1e2a1e; }}
+        .top-header {{
+            position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+            background: #1f3b2c; color: white;
+            padding: 0.55rem 1.5rem;
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            gap: 0.8rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-bottom: 3px solid #b7b87b;
+            min-height: 48px;
         }}
-        .map-header .header-left {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex: 1;
-            min-width: 200px;
+        .brand {{
+            display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
         }}
-        .map-header .header-logo {{
-            height: 32px;
-            width: auto;
-            object-fit: contain;
+        .header-logo {{
+            height: 28px; width: auto; object-fit: contain; margin-right: 2px;
         }}
-        .map-header .header-info {{
-            line-height: 1.3;
+        .brand .logo {{
+            font-weight: 800; font-size: 1.1rem; letter-spacing: -0.3px;
+            background: #e6b42220; padding: 0.15rem 0.5rem; border-radius: 40px;
+            border-left: 3px solid #e9c46a;
         }}
-        .map-header .header-info a {{
-            color: #ffde9c;
-            text-decoration: none;
+        .brand .logo a {{ color: #f5e7b2; text-decoration: none; }}
+        .institution-name {{
+            font-weight: 500; font-size: 0.75rem;
+            background: #2a4b37; padding: 0.15rem 0.6rem; border-radius: 30px;
         }}
-        .map-header .header-title {{
-            font-weight: bold;
-            background: #4a6a3b;
-            padding: 3px 14px;
-            border-radius: 30px;
-            font-size: 0.75rem;
-            white-space: nowrap;
-            text-align: center;
-            flex-shrink: 0;
+        .map-title-header {{
+            background: #00000033; backdrop-filter: blur(4px);
+            padding: 0.2rem 0.8rem; border-radius: 40px;
+            font-weight: 600; font-size: 0.8rem; letter-spacing: 0.3px;
+            border: 1px solid #cee2b0; text-align: center;
         }}
-        .map-legend {{
-            position: fixed;
-            bottom: 42px;
-            left: 12px;
-            z-index: 10000;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(3px);
-            border-radius: 12px;
-            padding: 10px 14px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-left: 6px solid #3c6e3f;
-            min-width: 200px;
-            font-size: 12px;
-            line-height: 1.4;
-            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
-            pointer-events: auto;
-            max-height: 55vh;
-            overflow-y: auto;
+        .departamento-tech {{
+            font-size: 0.6rem; background: #2c5a3b; padding: 0.15rem 0.7rem;
+            border-radius: 20px; display: inline-flex; align-items: center; gap: 4px;
         }}
-        .map-legend h4 {{
-            margin: 0 0 6px 0;
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #2c3e2f;
-            border-bottom: 1px solid #ccc;
-            display: inline-block;
-            padding-right: 10px;
+        .map-wrapper {{ flex: 1; position: relative; background: #cbdcd0; }}
+        #map {{ height: 100%; width: 100%; z-index: 1; }}
+        .folium-map {{ margin-top: 52px !important; margin-bottom: 24px !important; }}
+
+        .info-card {{
+            position: absolute; bottom: 20px; right: 20px; width: 280px;
+            max-width: calc(100% - 40px);
+            background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px);
+            border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            padding: 0.9rem 1.1rem; border-left: 5px solid #4c9f70;
+            z-index: 10; font-size: 0.78rem; pointer-events: auto;
         }}
-        .map-legend ul {{
-            list-style: none;
-            padding-left: 0;
-            margin: 6px 0 0 0;
+        .info-card h3 {{
+            font-size: 1rem; font-weight: 700; margin: 0 0 0.4rem 0;
+            color: #1e3b2a; border-bottom: 2px solid #e0e7cf;
+            display: inline-block; padding-right: 1rem;
         }}
-        .map-legend li {{
-            display: flex;
-            align-items: center;
-            margin-bottom: 6px;
-            gap: 8px;
-            font-size: 11px;
+        .info-card p {{ margin: 0.4rem 0; line-height: 1.4; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }}
+        .info-label {{ font-weight: 700; color: #2c6e3c; min-width: 65px; font-size: 0.7rem; }}
+        .info-value {{ font-weight: 500; color: #1c2c1a; }}
+        .info-footer {{
+            margin-top: 8px; font-size: 0.65rem; color: #4f6b4a;
+            border-top: 1px solid #ddd9c5; padding-top: 6px; text-align: center;
         }}
-        .legend-color {{
-            width: 26px;
-            height: 12px;
-            display: inline-block;
-            border-radius: 2px;
-            flex-shrink: 0;
+
+        .legend-card {{
+            position: absolute; bottom: 20px; left: 20px; width: 240px;
+            max-width: calc(100% - 60px);
+            background: rgba(255, 255, 248, 0.97); backdrop-filter: blur(8px);
+            border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            padding: 0.8rem 0.9rem; border-right: 3px solid #8bb56a;
+            z-index: 10; font-size: 0.75rem; pointer-events: auto;
+            max-height: 50vh; overflow-y: auto;
         }}
-        .legend-line {{
-            width: 26px;
-            height: 3px;
-            display: inline-block;
-            border-radius: 2px;
-            flex-shrink: 0;
+        .legend-card h4 {{
+            font-size: 0.85rem; font-weight: 700; margin: 0 0 6px 0;
+            color: #2d4a26; display: flex; align-items: center; gap: 6px;
+            border-bottom: 1px solid #ccdbb8; padding-bottom: 4px;
         }}
-        .circle-icon {{
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            border: 1.5px solid;
-            display: inline-block;
-            flex-shrink: 0;
+        .legend-list {{ list-style: none; margin: 0; padding: 0; }}
+        .legend-list li {{
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 6px; font-size: 0.7rem; line-height: 1.3;
         }}
-        .map-legend .legend-footer {{
-            font-size: 9px;
-            margin-top: 8px;
-            border-top: 1px solid #ddd;
-            padding-top: 5px;
-            color: #4e5e4a;
-            text-align: center;
-            line-height: 1.3;
+        .legend-color {{ width: 24px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }}
+        .legend-line {{ width: 24px; height: 3px; display: inline-block; border-radius: 2px; flex-shrink: 0; }}
+        .legend-dash {{ width: 24px; height: 0; border-top: 2px dashed; display: inline-block; flex-shrink: 0; }}
+        .circle-marker {{ width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid; display: inline-block; flex-shrink: 0; }}
+        .legend-footer-small {{
+            font-size: 0.6rem; margin-top: 8px; text-align: center;
+            color: #5b6e53; border-top: 1px solid #e0e2d4; padding-top: 5px;
         }}
-        .map-footer {{
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            z-index: 10000;
-            background: #f8f9f4;
-            padding: 4px 12px;
-            font-size: 10px;
-            color: #2d3e2a;
-            border-top: 1px solid #cbd5c0;
-            text-align: center;
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            font-family: monospace;
-            min-height: 28px;
-            align-items: center;
-        }}
-        .map-footer a {{
-            color: #2c6e2f;
-            text-decoration: none;
-        }}
-        .map-footer .scale-note {{
-            font-weight: 500;
-            background: #e9ece5;
-            padding: 1px 8px;
-            border-radius: 20px;
-        }}
-        .folium-map {{
-            margin-top: 58px !important;
-            margin-bottom: 28px !important;
+
+        .footer-credits {{
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;
+            background: #eaf2e5; font-size: 0.6rem; text-align: center;
+            padding: 4px; color: #2b482f; border-top: 1px solid #c7dcb4;
+            font-family: monospace; min-height: 22px;
         }}
         .leaflet-control-layers {{
-            border-radius: 8px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+            margin-top: 56px !important; margin-left: 8px !important;
+            border-radius: 16px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
         }}
         .leaflet-control-scale {{
-            font-size: 10px !important;
-            background: rgba(255,255,240,0.9) !important;
-            padding: 2px 5px !important;
-            border-radius: 6px !important;
+            background: rgba(255,255,245,0.9) !important;
+            border-radius: 12px !important; padding: 2px 8px !important;
+            font-size: 10px !important; font-weight: 500 !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important;
         }}
-        @media (max-width: 650px) {{
-            .map-header {{ font-size: 0.65rem; padding: 4px 8px; min-height: 42px; }}
-            .map-header .header-logo {{ height: 24px; }}
-            .map-header .header-title {{ font-size: 0.6rem; padding: 2px 10px; }}
-            .map-legend {{ font-size: 10px; padding: 6px 10px; min-width: 150px; bottom: 34px; left: 6px; }}
-            .map-legend li {{ font-size: 10px; }}
-            .map-footer {{ font-size: 8px; padding: 2px 6px; }}
-            .folium-map {{ margin-top: 46px !important; margin-bottom: 24px !important; }}
+        @media (max-width: 700px) {{
+            .top-header {{ padding: 0.4rem 0.8rem; flex-direction: column; align-items: flex-start; min-height: 40px; }}
+            .info-card, .legend-card {{ position: relative !important; bottom: auto; left: auto; right: auto; margin: 8px; width: auto; max-width: none; }}
+            .folium-map {{ margin-top: 88px !important; }}
+            .leaflet-control-layers {{ margin-top: 90px !important; }}
         }}
     </style>
-    <div class="map-header">
-        <div class="header-left">
+    <header class="top-header">
+        <div class="brand">
             {logo_html}
-            <div class="header-info">
-                🗺️ Departamento Técnico · {NATURA_ADDRESS}<br>
-                🌐 <a href="https://{NATURA_WEB}" target="_blank">{NATURA_WEB}</a>
-            </div>
+            <div class="logo">🌿 <a href="https://{NATURA_WEB}" target="_blank">NaturaArgentina</a></div>
+            <div class="institution-name">Conservación · Investigación · Territorios</div>
         </div>
-        <div class="header-title">
-            {title_display}{' · ' + area_str if area_str else ''}{' · ' + project_display if project_display else ''}
+        <div class="map-title-header" id="dynamicMapTitle">
+            📍 {header_title_text}
         </div>
-    </div>
-    <div class="map-legend">
-        <h4>📖 Referencias del mapa</h4>
-        <ul>
+        <div class="departamento-tech">
+            🏢 Dpto. Técnico | {NATURA_ADDRESS}
+        </div>
+    </header>
+    <div class="legend-card">
+        <h4>📖 Referencias cartográficas</h4>
+        <ul class="legend-list">
             {legend_items}
         </ul>
-        <div class="legend-footer">
-            🧭 Elaboración: Dpto. Técnico{ ' · ' + project_display if project_display else ''}<br>
-            Escala gráfica 0-10-20 km · Datos referenciales de campo
+        <div class="legend-footer-small">
+            ⚙️ Escala gráfica: 0 — 10 — 20 km (control inferior izquierdo)<br>
+            Base: OpenStreetMap · Capas temáticas ajustables
         </div>
     </div>
-    <div class="map-footer">
-        <span>📌 Referencias cartográficas oficiales · Base: OpenStreetMap</span>
-        <span class="scale-note">⚖️ Escala gráfica: 0 — 10 — 20 km (control inferior izquierdo)</span>
-        <span>📍 Coordenadas aproximadas</span>
+    <div class="info-card" id="infoCard">
+        <h3>📋 Información del área</h3>
+        <p><span class="info-label">📍 Ubicación:</span><span class="info-value">{project_display if project_display else "Área de interés"}</span></p>
+        {area_info}
+        <p><span class="info-label">🗺️ Referencia:</span><span class="info-value">{title_display}</span></p>
+        <p><span class="info-label">📅 Fecha base:</span><span class="info-value">{today_str}</span></p>
+        {location_info}
+        <div class="info-footer">
+            🌱 Datos técnicos de campo · Relevamiento Natura Argentina
+        </div>
+    </div>
+    <div class="footer-credits">
+        🌎 www.{NATURA_WEB} | {NATURA_ADDRESS} | Map template v2.0 - generación automática
     </div>
     '''
     return template
