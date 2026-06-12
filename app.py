@@ -750,7 +750,8 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
     # Inject toggle-layer listener for print template
     toggle_js = """
 <script>
-window.__toggleLayer = function(layerId, visible) {
+window.__layers = {};
+(function() {
     try {
         var m = null;
         for (var k in window) {
@@ -760,11 +761,25 @@ window.__toggleLayer = function(layerId, visible) {
         }
         if (!m) return;
         m.eachLayer(function(layer) {
-            if (layer.options && layer.options.layerId === layerId) {
-                if (visible) m.addLayer(layer);
-                else m.removeLayer(layer);
+            if (layer.options && layer.options.layerId) {
+                window.__layers[layer.options.layerId] = layer;
             }
         });
+    } catch(e) { console.warn('init layers:', e); }
+})();
+window.__toggleLayer = function(layerId, visible) {
+    try {
+        var layer = window.__layers[layerId];
+        if (!layer) return;
+        var m = null;
+        for (var k in window) {
+            if (k.indexOf('map_') === 0 && window[k] && window[k].eachLayer) {
+                m = window[k]; break;
+            }
+        }
+        if (!m) return;
+        if (visible) m.addLayer(layer);
+        else m.removeLayer(layer);
     } catch(e) { console.warn('toggle:', e); }
 };
 window.addEventListener('message', function(e) {
