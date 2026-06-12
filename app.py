@@ -736,17 +736,6 @@ def create_interactive_map(layers, basemap_name, project_name, map_name, include
         attr=attr,
     )
 
-    for name in BASEMAP_SWITCHER:
-        if name != basemap_name:
-            folium.TileLayer(
-                tiles=BASEMAPS[name],
-                name=name,
-                attr=BASEMAP_ATTRS.get(name, ""),
-                overlay=False,
-                control=True,
-            ).add_to(m)
-    folium.LayerControl(collapsed=True).add_to(m)
-
     for i, (gdf, layer_name, fill_color, edge_color) in enumerate(layers):
         if gdf.crs.to_string() != "EPSG:4326":
             gdf = gdf.to_crs("EPSG:4326")
@@ -799,27 +788,8 @@ window.__toggleLayer = function(layerId, visible) {
 window.addEventListener('message', function(e) {
     if (e.data && e.data.type === 'toggleLayer') {
         window.__toggleLayer(e.data.layerId, e.data.visible);
-    } else if (e.data && e.data.type === 'switchBasemap') {
-        window.__switchBasemap(e.data.name);
     }
 });
-window.__switchBasemap = function(name) {
-    try {
-        var m = null;
-        for (var k in window) {
-            if (k.indexOf('map_') === 0 && window[k] && window[k].eachLayer) {
-                m = window[k]; break;
-            }
-        }
-        if (!m) return;
-        m.eachLayer(function(layer) {
-            if (layer instanceof L.TileLayer) {
-                if (layer.options.name === name) m.addLayer(layer);
-                else m.removeLayer(layer);
-            }
-        });
-    } catch(e) { console.warn('basemap:', e); }
-};
 </script>"""
     m.get_root().html.add_child(folium.Element(toggle_js))
 
