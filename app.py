@@ -136,25 +136,7 @@ def _build_interactive_template(
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Montserrat', 'Segoe UI', Roboto, Helvetica, sans-serif; background: #eef2f0; color: #1e2a1e; }}
-        .top-header {{
-            position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
-            background: #1f3b2c; color: white;
-            padding: 0.55rem 1.5rem;
-            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
-            gap: 0.8rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-bottom: 3px solid #b7b87b;
-            min-height: 48px;
-        }}
-        .brand {{ display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }}
-        .header-logo {{ height: 28px; width: auto; object-fit: contain; margin-right: 2px; }}
-        .brand .logo {{ font-weight: 800; font-size: 1.1rem; letter-spacing: -0.3px; background: #e6b42220; padding: 0.15rem 0.5rem; border-radius: 40px; border-left: 3px solid #e9c46a; }}
-        .brand .logo a {{ color: #f5e7b2; text-decoration: none; }}
-        .institution-name {{ font-weight: 500; font-size: 0.75rem; background: #2a4b37; padding: 0.15rem 0.6rem; border-radius: 30px; }}
-        .map-title-header {{ background: #00000033; backdrop-filter: blur(4px); padding: 0.2rem 0.8rem; border-radius: 40px; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.3px; border: 1px solid #cee2b0; text-align: center; }}
-        .departamento-tech {{ font-size: 0.6rem; background: #2c5a3b; padding: 0.15rem 0.7rem; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; }}
-        .map-wrapper {{ flex: 1; position: relative; background: #cbdcd0; }}
         #map {{ height: 100%; width: 100%; z-index: 1; }}
-        .folium-map {{ margin-top: 52px !important; margin-bottom: 24px !important; }}
         .info-card {{ position: absolute; bottom: 20px; right: 20px; width: 280px; max-width: calc(100% - 40px); background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding: 0.9rem 1.1rem; border-left: 5px solid #4c9f70; z-index: 10; font-size: 0.78rem; pointer-events: auto; }}
         .info-card h3 {{ font-size: 1rem; font-weight: 700; margin: 0 0 0.4rem 0; color: #1e3b2a; border-bottom: 2px solid #e0e7cf; display: inline-block; padding-right: 1rem; }}
         .info-card p {{ margin: 0.4rem 0; line-height: 1.4; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }}
@@ -170,23 +152,7 @@ def _build_interactive_template(
         .circle-marker {{ width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid; display: inline-block; flex-shrink: 0; }}
         .legend-footer-small {{ font-size: 0.6rem; margin-top: 8px; text-align: center; color: #5b6e53; border-top: 1px solid #e0e2d4; padding-top: 5px; }}
         .footer-credits {{ position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000; background: #eaf2e5; font-size: 0.6rem; text-align: center; padding: 4px; color: #2b482f; border-top: 1px solid #c7dcb4; font-family: monospace; min-height: 22px; }}
-        .leaflet-control-layers {{ margin-top: 56px !important; margin-left: 8px !important; border-radius: 16px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important; }}
-        .leaflet-control-scale {{ background: rgba(255,255,245,0.9) !important; border-radius: 12px !important; padding: 2px 8px !important; font-size: 10px !important; font-weight: 500 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.2) !important; }}
-        @media (max-width: 700px) {{ .top-header {{ padding: 0.4rem 0.8rem; flex-direction: column; align-items: flex-start; min-height: 40px; }} .info-card, .legend-card {{ position: relative !important; bottom: auto; left: auto; right: auto; margin: 8px; width: auto; max-width: none; }} .folium-map {{ margin-top: 88px !important; }} .leaflet-control-layers {{ margin-top: 90px !important; }} }}
     </style>
-    <header class="top-header">
-        <div class="brand">
-            {logo_html}
-            <div class="logo"><a href="https://{NATURA_WEB}" target="_blank">NaturaArgentina</a></div>
-            <div class="institution-name">Conservación · Investigación · Territorios</div>
-        </div>
-        <div class="map-title-header" id="dynamicMapTitle">
-            {header_title_text}
-        </div>
-        <div class="departamento-tech">
-            Dpto. Técnico | {NATURA_ADDRESS}
-        </div>
-    </header>
     <div class="legend-card">
         <h4>Referencias cartográficas</h4>
         <ul class="legend-list">
