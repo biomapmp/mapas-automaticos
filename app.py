@@ -669,13 +669,6 @@ def load_polygon(uploaded_file):
         return ensure_crs(read_kmz(file_bytes))
     elif fname.endswith(".zip"):
         return ensure_crs(read_shapefile_zip(file_bytes))
-    elif fname.endswith(".shp"):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            shp_path = os.path.join(tmpdir, uploaded_file.name)
-            with open(shp_path, "wb") as f:
-                f.write(file_bytes)
-            os.environ["SHAPE_RESTORE_SHX"] = "YES"
-            return ensure_crs(gpd.read_file(shp_path))
     elif fname.endswith(".geojson") or fname.endswith(".json"):
         with tempfile.NamedTemporaryFile(suffix=".geojson", delete=False) as f:
             f.write(file_bytes)
@@ -689,6 +682,25 @@ def load_polygon(uploaded_file):
         raise ValueError(
             "Formato no soportado. Usa .kml, .kmz, .zip (con .shp), .shp, .geojson"
         )
+
+
+def load_shapefile_set(files):
+    """Load a shapefile from a list of component files (.shp, .shx, .dbf, .prj, .cpg, etc.)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        base_name = None
+        for uf in files:
+            name = uf.name
+            ext = os.path.splitext(name)[1].lower()
+            if ext == ".shp":
+                base_name = os.path.splitext(name)[0]
+            fpath = os.path.join(tmpdir, name)
+            with open(fpath, "wb") as f:
+                f.write(uf.getvalue())
+        if not base_name:
+            raise ValueError("No se encontró un archivo .shp en el grupo")
+        os.environ["SHAPE_RESTORE_SHX"] = "YES"
+        shp_path = os.path.join(tmpdir, base_name + ".shp")
+        return ensure_crs(gpd.read_file(shp_path))
 
 
 def create_interactive_map(layers, basemap_name, project_name, map_name, include_labels=False, logo_path=None):
@@ -881,16 +893,45 @@ def main():
         else:
             with st.spinner("Leyendo archivos..."):
                 try:
+                    SHP_EXTS = {".shp", ".shx", ".dbf", ".prj", ".cpg", ".qix", ".sbn", ".sbx"}
+                    shp_groups = {}
+                    non_shp = []
+                    for uf in uploaded_files:
+                        ext = os.path.splitext(uf.name)[1].lower()
+                        if ext in SHP_EXTS:
+                            base = os.path.splitext(uf.name)[0]
+                            shp_groups.setdefault(base, []).append(uf)
+                        else:
+                            non_shp.append(uf)
+
                     layers = []
-                    for i, uf in enumerate(uploaded_files):
-                        gdf = load_polygon(uf)
-                        if gdf.empty:
-                            st.warning(f"'{uf.name}' no contiene geometrías válidas, se omite.")
-                            continue
-                        layer_name = os.path.splitext(uf.name)[0]
-                        fc, ec = LAYER_COLORS[i % len(LAYER_COLORS)]
-                        layers.append((gdf, layer_name, fc, ec))
-                        st.success(f"✓ {layer_name}: {len(gdf)} geometría(s)")
+                    color_idx = 0
+
+                    for base, group in shp_groups.items():
+                        try:
+                            gdf = load_shapefile_set(group)
+                            if gdf.empty:
+                                st.warning(f"'{base}.shp' no contiene geometrías válidas, se omite.")
+                                continue
+                            fc, ec = LAYER_COLORS[color_idx % len(LAYER_COLORS)]
+                            color_idx += 1
+                            layers.append((gdf, base, fc, ec))
+                            st.success(f"✓ {base}: {len(gdf)} geometría(s)")
+                        except Exception as e:
+                            st.warning(f"Error al cargar shapefile '{base}': {e}")
+
+                    for uf in non_shp:
+                        try:
+                            gdf = load_polygon(uf)
+                            if gdf.empty:
+                                st.warning(f"'{uf.name}' no contiene geometrías válidas, se omite.")
+                                continue
+                            fc, ec = LAYER_COLORS[color_idx % len(LAYER_COLORS)]
+                            color_idx += 1
+                            layers.append((gdf, os.path.splitext(uf.name)[0], fc, ec))
+                            st.success(f"✓ {uf.name}: {len(gdf)} geometría(s)")
+                        except Exception as e:
+                            st.warning(f"Error al cargar '{uf.name}': {e}")
 
                     if layers:
                         st.session_state["layers"] = layers
