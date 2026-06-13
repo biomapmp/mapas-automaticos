@@ -311,7 +311,7 @@ def _build_print_template(fig_map_html, layers, project_name, map_name, logo_pat
     folium_json_str = _json.dumps(fig_map_html).replace('</script>', '<\\/script>')
 
     basemap_variants_escaped = basemap_variants or {basemap_name: fig_map_html}
-    _capture_script = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script>window.addEventListener("message",async function(e){if(e.data==="prepareCapture"){var d=document.querySelector("[id^=\\"map_\\"]");var m=window[d&&d.id];if(m&&m.invalidateSize&&!m._captureBlocked){m._captureBlocked=true;m._origInvalidate=m.invalidateSize;m.invalidateSize=function(){return this}}}if(e.data==="captureMap"){try{var d=document.querySelector("[id^=\\"map_\\"]");var c=await html2canvas(d,{scale:2,useCORS:true,allowTaint:false,backgroundColor:"#e8ece8"});var m=window[d&&d.id];if(m&&m._origInvalidate){m.invalidateSize=m._origInvalidate;delete m._origInvalidate;delete m._captureBlocked}e.source.postMessage({type:"mapCapture",dataUrl:c.toDataURL("image/png")},"*")}catch(err){e.source.postMessage({type:"mapCaptureError",message:err.message},"*")}}});</script>'
+    _capture_script = '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script><script>window.addEventListener("message",async function(e){if(e.data==="captureMap"){try{var d=document.querySelector("[id^=\\"map_\\"]");var m=window[d&&d.id];if(m&&m.invalidateSize&&!m._cb){m._cb=true;m._oi=m.invalidateSize;m.invalidateSize=function(){return this}}var c=await html2canvas(d,{scale:2,useCORS:true,allowTaint:false,backgroundColor:"#e8ece8"});if(m&&m._oi){m.invalidateSize=m._oi;delete m._oi;delete m._cb}e.source.postMessage({type:"mapCapture",dataUrl:c.toDataURL("image/png")},"*")}catch(err){e.source.postMessage({type:"mapCaptureError",message:err.message},"*")}}});</script>'
     for k in list(basemap_variants_escaped.keys()):
         basemap_variants_escaped[k] = basemap_variants_escaped[k].replace('</body>', _capture_script + '</body>')
     basemap_variants_json = _json.dumps(basemap_variants_escaped, ensure_ascii=False).replace('</script>', '<\\/script>')
@@ -520,15 +520,14 @@ function switchBasemap(name) {{
 
 async function captureLayout() {{
     var layout = document.getElementById('printLayout');
+    var leftPanel = layout.querySelector('.left-panel');
     var iframe = document.getElementById('mapIframe');
-    if (!layout || !iframe) return null;
-    var sc = 2;
+    if (!layout || !iframe || !leftPanel) return null;
+    var sc = 2, lw = 1200 * sc, lh = 900 * sc;
     try {{
-        iframe.contentWindow.postMessage('prepareCapture', '*');
-        await new Promise(function(r) {{ setTimeout(r, 50); }});
-        var layoutCanvas = await html2canvas(layout, {{
+        var leftCanvas = await html2canvas(leftPanel, {{
             scale: sc, useCORS: true, allowTaint: false,
-            backgroundColor: '#ffffff', logging: false,
+            backgroundColor: '#fafaf8', logging: false,
         }});
         var mapDataUrl = await new Promise(function(resolve, reject) {{
             var t = setTimeout(function() {{ reject(new Error('timeout')); }}, 20000);
@@ -542,11 +541,15 @@ async function captureLayout() {{
         var mapImg = new Image();
         mapImg.src = mapDataUrl;
         await new Promise(function(resolve, reject) {{ mapImg.onload = resolve; mapImg.onerror = reject; }});
-        var ctx = layoutCanvas.getContext('2d');
-        var lr = layout.getBoundingClientRect();
-        var ir = iframe.getBoundingClientRect();
-        ctx.drawImage(mapImg, (ir.left - lr.left) * sc, (ir.top - lr.top) * sc, ir.width * sc, ir.height * sc);
-        return layoutCanvas;
+        var outCanvas = document.createElement('canvas');
+        outCanvas.width = lw; outCanvas.height = lh;
+        var ctx = outCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, lw, lh);
+        ctx.drawImage(leftCanvas, 0, 0);
+        var mapL = leftCanvas.width;
+        ctx.drawImage(mapImg, mapL, 0, lw - mapL, lh);
+        return outCanvas;
     }} catch(e) {{ throw e; }}
 }}
 async function exportFormat(format) {{
