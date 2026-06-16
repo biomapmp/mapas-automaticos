@@ -207,7 +207,7 @@ def _build_interactive_template(
     return template
 
 
-def _build_print_template(fig_map_html, layers, project_name, map_name, logo_path=None, basemap_variants=None, basemap_name=None):
+def _build_print_template(fig_map_html, layers, project_name, map_name, dept_name="Departamento Técnico", logo_path=None, basemap_variants=None, basemap_name=None):
     """Build a self-contained print-layout HTML with left panel + map + layer toggles + export."""
     total_area_ha = 0.0
     total_area_km2 = 0.0
@@ -484,7 +484,7 @@ body {{ font-family:'Montserrat','Segoe UI',Roboto,sans-serif; background:#eef2f
                 <div class="scale-bar-line"></div>
                 <span class="scale-label">10 km</span>
             </div>
-            <div class="dept-title">Departamento Técnico</div>
+            <div class="dept-title">{dept_name}</div>
         </div>
         <div class="credits">
             {logo_html}
@@ -838,7 +838,7 @@ window.addEventListener('message', function(e) {
     return m
 
 
-def generate_print_template(layers, basemap_name, project_name, map_name, include_labels=False, logo_path=None):
+def generate_print_template(layers, basemap_name, project_name, map_name, dept_name="Departamento Técnico", include_labels=False, logo_path=None):
     """Generate a self-contained print layout HTML with map, legend toggles, and export buttons."""
     folium_map = create_interactive_map(layers, basemap_name, project_name, map_name,
                                         include_labels=include_labels, logo_path=logo_path)
@@ -851,7 +851,7 @@ def generate_print_template(layers, basemap_name, project_name, map_name, includ
                                     include_labels=include_labels, logo_path=logo_path)
         if fm:
             basemap_variants[bm] = fm.get_root().render()
-    print_html = _build_print_template(folium_html, layers, project_name, map_name, logo_path=logo_path,
+    print_html = _build_print_template(folium_html, layers, project_name, map_name, dept_name=dept_name, logo_path=logo_path,
                                        basemap_variants=basemap_variants, basemap_name=basemap_name)
     return print_html
 
@@ -876,6 +876,7 @@ def main():
         st.subheader("Datos del mapa")
         project_name = st.text_input("Nombre del proyecto", value="Proyecto Ejemplo")
         map_name = st.text_input("Nombre del mapa", value="Mapa de Área de Interés")
+        dept_name = st.text_input("Departamento / Equipo", value="Departamento Técnico")
 
         uploaded_files = st.file_uploader(
             "Cargar archivos (capas)",
@@ -1020,6 +1021,7 @@ def main():
                 try:
                     print_html = generate_print_template(
                         html_layers, basemap_name, project_name, map_name,
+                        dept_name=dept_name,
                         include_labels=include_labels, logo_path=export_logo_path,
                     )
                     if print_html:
